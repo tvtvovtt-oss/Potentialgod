@@ -4,16 +4,8 @@
 -- ====================================================================
 
 -- 1. Load WindUi Library (UPDATED: Direct execution)
-local WindUi = nil
-local success = pcall(function()
-    WindUi = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
-end)
-
-if not success or not WindUi then
-    print("[DIX ERROR] WindUI failed to load! Only core functions will run.")
-    print("Error details (if any): " .. tostring(WindUi))
-    WindUi = nil -- Убеждаемся, что WindUi равен nil при сбое
-end
+-- Load WindUi Library
+local WindUi = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
 -- 2. Service Initialization
 local Players = game:GetService("Players")
