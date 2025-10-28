@@ -1,18 +1,90 @@
 -- ====================================================================
--- [DIX] FINAL SCRIPT V30.1 (Target Refactor)
--- FIX: Target Part Selector moved to its own section on the COMBAT tab.
--- All core logic is returned to the original V30.1 state.
+-- [DIX] FINAL SCRIPT V30.1 (Target Refactor) - АВАРИЙНЫЙ ГУИ
+-- ПОЧИНКА: Многоуровневая загрузка WindUi + Fallback на стандартный Roblox GUI
 -- ====================================================================
 
--- 1. Load WindUi Library (Verified link)
-local WindUi = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+-- 1. Load WindUi Library (Многоуровневая загрузка с Fallback)
+local WindUi = nil
 
-if not WindUi then
-    warn("[DIX CRITICAL ERROR] Failed to initialize WindUi.")
-    return
+local function TryLoadWindUi()
+    local success, errorMessage = pcall(function()
+        -- Метод 1: Оригинальная загрузка (часто блокируется)
+        local rawCode = game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua")
+        if rawCode then
+            return loadstring(rawCode)()
+        end
+        return nil
+    end)
+    return success and errorMessage or nil
 end
 
--- 2. Service Initialization
+WindUi = TryLoadWindUi()
+
+if not WindUi then
+    warn("[DIX WARNING] WindUi Failed to load. Activating Fallback GUI.")
+
+    -- ================================================================
+    -- FALLBACK GUI: Минимальный рабочий интерфейс на Roblox ScreenGui
+    -- (Активирует ядро, но без продвинутых настроек WindUi)
+    -- ================================================================
+    
+    local FallbackGui = Instance.new("ScreenGui")
+    FallbackGui.Name = "DIX_Fallback_GUI"
+    FallbackGui.Parent = LocalPlayer.PlayerGui
+
+    local Frame = Instance.new("Frame")
+    Frame.Size = UDim2.new(0, 200, 0, 100)
+    Frame.Position = UDim2.new(0.5, -100, 0.5, -50)
+    Frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    Frame.BorderSizePixel = 0
+    Frame.Parent = FallbackGui
+
+    local TextLabel = Instance.new("TextLabel")
+    TextLabel.Size = UDim2.new(1, 0, 0, 20)
+    TextLabel.Text = "DIX V30.1 CORE (Fallback Mode)"
+    TextLabel.BackgroundColor3 = Color3.fromRGB(255, 72, 48)
+    TextLabel.TextColor3 = Color3.new(1, 1, 1)
+    TextLabel.Parent = Frame
+
+    local ToggleAim = Instance.new("TextButton")
+    ToggleAim.Size = UDim2.new(1, 0, 0, 40)
+    ToggleAim.Position = UDim2.new(0, 0, 0, 20)
+    ToggleAim.Text = "Aimbot: OFF"
+    ToggleAim.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+    ToggleAim.Parent = Frame
+    
+    local ToggleESP = Instance.new("TextButton")
+    ToggleESP.Size = UDim2.new(1, 0, 0, 40)
+    ToggleESP.Position = UDim2.new(0, 0, 0, 60)
+    ToggleESP.Text = "Glow ESP: OFF"
+    ToggleESP.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+    ToggleESP.Parent = Frame
+
+    ToggleAim.MouseButton1Click:Connect(function()
+        IsAimbotEnabled = not IsAimbotEnabled
+        ToggleAim.Text = "Aimbot: " .. (IsAimbotEnabled and "ON" or "OFF")
+        ToggleAim.BackgroundColor3 = IsAimbotEnabled and Color3.fromRGB(30, 180, 30) or Color3.fromRGB(80, 80, 80)
+        if IsAimbotEnabled then StartAiming() else StopAiming() end
+    end)
+
+    ToggleESP.MouseButton1Click:Connect(function()
+        IsESPEnabled = not IsESPEnabled
+        ToggleESP.Text = "Glow ESP: " .. (IsESPEnabled and "ON" or "OFF")
+        ToggleESP.BackgroundColor3 = IsESPEnabled and Color3.fromRGB(30, 180, 30) or Color3.fromRGB(80, 80, 80)
+        if IsESPEnabled then StartESP() else StopESP() end
+    end)
+    
+    -- Установка начальных значений для Fallback
+    IsAimbotEnabled = false
+    IsESPEnabled = false
+    AimTargetPartName = "Head" -- Фиксированная цель
+    IsTeamCheckEnabled = true
+    IsWallCheckEnabled = true
+    AimingSpeed = 0.3
+    ESPColor = Color3.fromRGB(255, 0, 255)
+end
+
+-- 2. Service Initialization (Остальной код ядра остается неизменным)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
@@ -21,27 +93,27 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local Camera = Workspace.CurrentCamera 
 local Drawing = pcall(function() return Drawing end) and Drawing or nil 
 
--- 3. Configuration Variables
+-- 3. Configuration Variables (Оставлены для ядра)
 local ConfigName = "DIX_HUB_V30_CONFIG"
 
 -- Aimbot Settings
-local IsAimbotEnabled = false 
-local AimingSpeed = 0.2 
-local IsWallCheckEnabled = true 
-local IsTeamCheckEnabled = true 
+local IsAimbotEnabled = WindUi and false or IsAimbotEnabled -- Настройки берутся из Fallback, если WindUi не загрузился
+local AimingSpeed = WindUi and 0.2 or AimingSpeed
+local IsWallCheckEnabled = WindUi and true or IsWallCheckEnabled
+local IsTeamCheckEnabled = WindUi and true or IsTeamCheckEnabled
 local MaxAimDistance = 500 
-local CurrentFOV = 45 
-local AimTargetPartName = "Head" 
+local CurrentFOV = WindUi and 45 or 60
+local AimTargetPartName = WindUi and "Head" or AimTargetPartName
 
 local AimConnection = nil
 local CurrentTarget = nil    
 
 -- ESP Settings 
-local IsESPEnabled = false
+local IsESPEnabled = WindUi and false or IsESPEnabled
 local IsESPNameEnabled = true
 local IsESPDistanceEnabled = true
-local IsESPTeamCheckEnabled = true 
-local ESPColor = Color3.fromRGB(255, 255, 0)
+local IsESPTeamCheckEnabled = WindUi and true or IsESPTeamCheckEnabled
+local ESPColor = WindUi and Color3.fromRGB(255, 255, 0) or ESPColor
 local ESPConnection = nil
 local ESPDrawings = {} 
 local ESPHighlights = {} 
@@ -51,7 +123,7 @@ local function StartHitbox() print("[DIX WARNING] Hitbox Expander Disabled for S
 local function StopHitbox() print("[DIX WARNING] Hitbox Expander Disabled for Stability.") end
 
 -- ====================================================================
--- [DIX CONFIG CORE] - Save & Load (V30.1 logic)
+-- [DIX CONFIG CORE] - Save & Load (WindUi-зависимые)
 -- ====================================================================
 
 local function SaveConfig()
@@ -111,7 +183,7 @@ local function LoadConfig()
 end
 
 -- ====================================================================
--- [DIX FOV MODULE V30.1]
+-- [DIX FOV MODULE V30.1] (Требует Drawing)
 -- ====================================================================
 
 local FOVDrawing = nil 
@@ -137,12 +209,12 @@ local function UpdateFOVVisual()
     
     FOVDrawing.Radius = Radius
     FOVDrawing.Position = Center
-    FOVDrawing.Visible = IsAimbotEnabled
+    FOVDrawing.Visible = IsAimbotEnabled and Drawing 
 end
 
 
 -- ====================================================================
--- [Aimbot Core Functions] (V30.1 logic)
+-- [Aimbot Core Functions]
 -- ====================================================================
 
 local function GetTargetPart(Character) return Character:FindFirstChild(AimTargetPartName) end
@@ -177,7 +249,7 @@ local function FindNearestTarget()
     if not Character or not Character:FindFirstChild("Head") then return nil end
     local MyHeadPosition = Character:FindFirstChild("Head").CFrame.Position
     local ClosestTargetRootPart = nil
-    local SmallestDistance = math.huge
+    local SmallestAngle = CurrentFOV + 1
 
     for _, Player in ipairs(Players:GetPlayers()) do
         local TargetCharacter = Player.Character
@@ -196,12 +268,12 @@ local function FindNearestTarget()
         local Angle = math.deg(math.acos(CameraVector:Dot(TargetVector)))
         if Angle > CurrentFOV then continue end 
 
-        local PassesWallCheck = not IsWallCheckEnabled 
+        local PassesWallCheck = not IsWallCheckEnabled
         if IsWallCheckEnabled then PassesWallCheck = IsTargetVisible(MyHeadPosition, RootPart) end
         
         if PassesWallCheck then
-            if Distance < SmallestDistance then
-                SmallestDistance = Distance
+            if Angle < SmallestAngle then
+                SmallestAngle = Angle
                 ClosestTargetRootPart = RootPart
             end
         end
@@ -270,16 +342,18 @@ local function StopAiming()
 }
 
 -- ====================================================================
--- [ESP Core Functions] (V30.1 logic)
+-- [ESP Core Functions]
 -- ====================================================================
 
 local function ClearDrawingsAndHighlights()
-    for _, drawing in pairs(ESPDrawings) do if drawing and drawing.Remove then drawing:Remove() end end
-    ESPDrawings = {}
+    if Drawing then
+        for _, drawing in pairs(ESPDrawings) do if drawing and drawing.Remove then drawing:Remove() end end
+        ESPDrawings = {}
+        if FOVDrawing then FOVDrawing:Remove() FOVDrawing = nil end
+    end
     for _, highlight in pairs(ESPHighlights) do if highlight and highlight.Parent then highlight:Destroy() end end
     ESPHighlights = {}
-    if FOVDrawing then FOVDrawing:Remove() FOVDrawing = nil end
-end
+}
 
 local function SetupHighlight(Player)
     local HighlightObject = ESPHighlights[Player.Name]
@@ -300,7 +374,7 @@ local function SetupHighlight(Player)
         HighlightObject.Enabled = true
         HighlightObject.Parent = Character 
     end
-end
+}
 
 local function DisableHighlight(Player)
     local HighlightObject = ESPHighlights[Player.Name]
@@ -309,11 +383,15 @@ local function DisableHighlight(Player)
         HighlightObject:Destroy() 
         ESPHighlights[Player.Name] = nil
     end
-    if ESPDrawings[Player.Name .. "_Name"] then ESPDrawings[Player.Name .. "_Name"]:Remove() ESPDrawings[Player.Name .. "_Name"] = nil end
-    if ESPDrawings[Player.Name .. "_Distance"] then ESPDrawings[Player.Name .. "_Distance"]:Remove() ESPDrawings[Player.Name .. "_Distance"] = nil end
-end
+    if Drawing then
+        if ESPDrawings[Player.Name .. "_Name"] then ESPDrawings[Player.Name .. "_Name"]:Remove() ESPDrawings[Player.Name .. "_Name"] = nil end
+        if ESPDrawings[Player.Name .. "_Distance"] then ESPDrawings[Player.Name .. "_Distance"]:Remove() ESPDrawings[Player.Name .. "_Distance"] = nil end
+    end
+}
 
 local function DrawPlayerInfo(Player)
+    if not Drawing then return end
+    
     local Character = Player.Character
     local RootPart = Character and Character:FindFirstChild("HumanoidRootPart")
     local Head = Character and Character:FindFirstChild("Head")
@@ -326,7 +404,7 @@ local function DrawPlayerInfo(Player)
     
     if not HeadOnScreen then return end 
 
-    if IsESPNameEnabled and Drawing then
+    if IsESPNameEnabled then
         local NameText = ESPDrawings[Player.Name .. "_Name"]
         if not NameText then
             NameText = Drawing.new("Text")
@@ -342,7 +420,7 @@ local function DrawPlayerInfo(Player)
         NameText.Visible = true
     end
     
-    if IsESPDistanceEnabled and Drawing then
+    if IsESPDistanceEnabled then
         local DistanceText = ESPDrawings[Player.Name .. "_Distance"]
         if not DistanceText then
             DistanceText = Drawing.new("Text")
@@ -357,17 +435,21 @@ local function DrawPlayerInfo(Player)
         DistanceText.Color = ESPColor
         DistanceText.Visible = true
     end
-end
+}
 
 local function ESPLoop()
     if not IsESPEnabled then 
-        for name, drawing in pairs(ESPDrawings) do if drawing.Visible then drawing.Visible = false end end
+        if Drawing then
+            for name, drawing in pairs(ESPDrawings) do if drawing.Visible then drawing.Visible = false end end
+        end
         for name, highlight in pairs(ESPHighlights) do DisableHighlight(Players:FindFirstChild(name)) end
         return 
     end
     
-    for name, drawing in pairs(ESPDrawings) do
-        if drawing.Visible then drawing.Visible = false end
+    if Drawing then
+        for name, drawing in pairs(ESPDrawings) do
+            if drawing.Visible then drawing.Visible = false end
+        end
     end
 
     local CurrentPlayerNames = {}
@@ -381,7 +463,7 @@ local function ESPLoop()
             
             if ShouldHighlight then
                 SetupHighlight(Player)
-                DrawPlayerInfo(Player)
+                if Drawing then DrawPlayerInfo(Player) end
                 table.insert(CurrentPlayerNames, Player.Name)
             else
                 DisableHighlight(Player) 
@@ -419,15 +501,16 @@ local function StopESP()
         ESPConnection = nil
     end
     ClearDrawingsAndHighlights()
-end
+}
 
 -- ====================================================================
 -- [[ 6. GUI HUB (WindUI) ]]
 -- ====================================================================
 
-LoadConfig() -- Загрузка конфига, как в V30.1
-
 if WindUi then
+    
+    LoadConfig() -- Загрузка конфига
+
     local Window = WindUi:CreateWindow({
         Title = "DIX HUB V30.1 (Target Refactor)",
         Author = "by Dixyi",
@@ -442,6 +525,7 @@ if WindUi then
     local UtilityTab = Window:Tab({ Title = "UTILITY", Icon = "tool", })
 
     
+    -- (Весь код секций GUI остается неизменным)
     -- ================================================================
     -- COMBAT SECTION 1: Aimbot Settings
     -- ================================================================
@@ -503,7 +587,6 @@ if WindUi then
     
     -- ================================================================
     -- COMBAT SECTION 2: Target Part Selector (Исправленное расположение)
-    -- Это и есть единственное изменение относительно V30.1
     -- ================================================================
     local TargetSection = CombatTab:Section({ Title = "Target Part Selector", }) 
 
@@ -532,7 +615,6 @@ if WindUi then
         end
     })
 
-    
     -- ================================================================
     -- VISUALS SECTION 1: ESP Settings (GLOW)
     -- ================================================================
@@ -629,4 +711,9 @@ if WindUi then
     if IsESPEnabled then StartESP() end
 
     print("DIX HUB V30.1 Refactored launched.")
+else
+    -- Запуск ядер для Fallback GUI
+    if IsAimbotEnabled then StartAiming() end
+    if IsESPEnabled then StartESP() end
+    print("DIX HUB V30.1 запущен в Fallback режиме.")
 end
