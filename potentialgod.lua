@@ -1,6 +1,10 @@
+[DIX]:
 -- ====================================================================
--- [DIX] FINAL SCRIPT V41.1 (FOV VISUAL FIX + Stable GUI)
--- FIX: Switched to direct GUI loading command for better reliability.
+-- [DIX] FINAL SCRIPT V41.6 (GUI-Dependent Startup)
+-- FIX: Core functions only run if WindUI loads successfully.
+-- FIX: Name placed above head, distance placed below root (V41.4).
+-- FIX: Ensured exactly one target part is always selected in the GUI (V41.5).
+-- REMOVED: Silent Aim Core.
 -- ====================================================================
 
 -- 1. Load WindUi Library (UPDATED: Direct execution)
@@ -10,7 +14,7 @@ local success = pcall(function()
 end)
 
 if not success or not WindUi then
-    print("[DIX ERROR] WindUI failed to load! Only core functions will run.")
+    print("[DIX ERROR] WindUI failed to load! Core functions will NOT run.")
     print("Error details (if any): " .. tostring(WindUi))
     WindUi = nil -- Убеждаемся, что WindUi равен nil при сбое
 end
@@ -29,12 +33,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- 3. Aimbot Settings
 local IsAimbotEnabled = true    -- Forced ON
-local IsSilentAimEnabled = true -- Forced ON
 local AimingSpeed = 0.2 
-local IsWallCheckEnabled = true 
+local IsWallCheckEnabled = false -- DIX DEFAULT: OFF (From V41.2 fix)
 local IsTeamCheckEnabled = true 
 local MaxAimDistance = 500 
-local CurrentFOV = 45 
+local CurrentFOV = 180 -- DIX DEFAULT: 180 (From V41.2 fix)
 local AimTargetPartName = "Head" 
 local Target_Head = true 
 local Target_UpperTorso = false
@@ -63,7 +66,6 @@ local ESPHighlights = {}
 
 -- ====================================================================
 -- [HELPER: PREDICATION & BYPASS LOGIC] 
--- (Оставлено без изменений)
 -- ====================================================================
 
 local function GetPredictedPosition(TargetPart, BulletSpeed)
@@ -87,10 +89,17 @@ end
 
 -- ====================================================================
 -- [Aimbot Core Functions]
--- (Оставлено без изменений)
 -- ====================================================================
 
-local function GetTargetPart(Character) return Character:FindFirstChild(AimTargetPartName) end
+local function GetTargetPart(Character) 
+    local part = Character:FindFirstChild(AimTargetPartName) 
+    -- Аварийное переключение на RootPart, если основная цель не найдена
+    if not part and AimTargetPartName ~= "HumanoidRootPart" then
+        return Character:FindFirstChild("HumanoidRootPart")
+    end
+    return part
+end
+
 local function IsTargetValid(TargetPart)
     local Player = Players:GetPlayerFromCharacter(TargetPart.Parent)
     if not Player then return false end
@@ -113,7 +122,13 @@ local function IsTargetVisible(Origin, TargetPart)
     RaycastParams.FilterDescendantsInstances = {LocalPlayer.Character, TargetCharacter}
     local Direction = TargetPosition - Origin
     local raycastResult = Workspace:Raycast(Origin, Direction.unit * (Origin - TargetPosition).Magnitude, RaycastParams)
-    return not raycastResult or Players:GetPlayerFromCharacter(raycastResult.Instance:FindFirstAncestorOfClass("Model")) == Players:GetPlayerFromCharacter(TargetCharacter)
+    
+    if not raycastResult then return true end
+    
+    local HitModel = raycastResult.Instance:FindFirstAncestorOfClass("Model")
+    if HitModel and HitModel == TargetCharacter then return true end
+    
+    return false 
 end
 
 local function FindNearestTarget()
@@ -138,13 +153,13 @@ local function FindNearestTarget()
         local AimPosition = AimPart.Position
         local TargetVector = (AimPosition - Camera.CFrame.Position).unit 
         local Angle = math.deg(math.acos(CameraVector:Dot(TargetVector)))
-        if Angle > CurrentFOV then continue end 
+        if IsAimbotEnabled and Angle > CurrentFOV then continue end 
 
         local PassesWallCheck = not IsWallCheckEnabled 
         if IsWallCheckEnabled then PassesWallCheck = IsTargetVisible(MyHeadPosition, RootPart) end
         
         if PassesWallCheck then
-            if Distance < SmallestDistance then
+            if Angle < math.deg(math.acos(CameraVector:Dot((ClosestTargetRootPart and GetTargetPart(ClosestTargetRootPart.Parent) or RootPart).Position - Camera.CFrame.Position).unit)) or not ClosestTargetRootPart then
                 SmallestDistance = Distance
                 ClosestTargetRootPart = RootPart
             end
@@ -183,7 +198,7 @@ local function StopFOVVisual()
 end
 
 local function AimFunction()
-    if not Camera or not LocalPlayer.Character or (not IsAimbotEnabled and not IsSilentAimEnabled) then 
+    if not Camera or not LocalPlayer.Character or not IsAimbotEnabled then 
         CurrentTarget = nil 
         StopFOVVisual()
         return 
@@ -196,7 +211,7 @@ local function AimFunction()
     TargetRootPart = FindNearestTarget()
     if TargetRootPart then CurrentTarget = TargetRootPart end
     
-    if IsAimbotEnabled and not IsSilentAimEnabled and TargetRootPart then
+    if IsAimbotEnabled and TargetRootPart then
         local AimPart = GetTargetPart(TargetRootPart.Parent)
         if AimPart then
             local TargetPosition = GetPredictedPosition(AimPart, 1500) 
@@ -224,71 +239,11 @@ end
 
 -- ====================================================================
 -- [SILENT AIM HANDLER] 
--- (Оставлено без изменений)
+-- Блок Silent Aim Handler УДАЛЕН.
 -- ====================================================================
-
-local IsBypassActive = false
-local RaycastHook = nil 
-
-local function HandleSilentAimShot()
-    if not IsSilentAimEnabled or not LocalPlayer.Character then return end
-    
-    local TargetRootPart = FindNearestTarget() 
-    
-    if TargetRootPart then
-        local AimPart = GetTargetPart(TargetRootPart.Parent)
-        
-        if AimPart and AimPart:IsA("BasePart") then
-            
-            local PredictedPosition = GetPredictedPosition(AimPart, 1500) 
-            
-            if hookfunction and Workspace.Raycast and AimPart.CFrame then 
-                IsBypassActive = true
-                
-                if not RaycastHook then
-                    RaycastHook = hookfunction(Workspace.Raycast, function(self, origin, direction, params)
-                        
-                        if IsSilentAimEnabled and IsBypassActive and AimPart.Parent and AimPart.CFrame then
-                            
-                            local TargetVector = PredictedPosition - origin
-                            local TargetDirection = TargetVector.unit
-                            
-                            return RaycastHook(self, origin, TargetDirection, params)
-                            
-                        else
-                            return RaycastHook(self, origin, direction, params)
-                        end
-                    end)
-                    
-                    print("[DIX INFO] Silent Aim: Raycast hook applied.")
-                end
-            else
-                 print("[DIX WARNING] Silent Aim: Cannot apply Raycast hook (Missing 'hookfunction' or 'Workspace.Raycast').")
-            end
-
-            task.delay(0.1, function()
-                IsBypassActive = false
-            end)
-            
-        end
-    end
-end
-
-ContextActionService:BindAction("SilentAimShot", function(actionName, inputState, inputObject)
-    if inputState == Enum.UserInputState.Begin then
-        if inputObject.UserInputType == Enum.UserInputType.MouseButton1 or inputObject.KeyCode == Enum.KeyCode.Space then
-             if IsSilentAimEnabled then
-                 HandleSilentAimShot()
-             end
-        end
-    end
-    return Enum.ContextActionResult.Pass
-end, false, Enum.UserInputType.MouseButton1, Enum.KeyCode.Space)
-
 
 -- ====================================================================
 -- [Hitbox Expander Core Functions] 
--- (Оставлено без изменений)
 -- ====================================================================
 
 local function ApplyHitboxExpansion(Player)
@@ -356,7 +311,6 @@ end
 
 -- ====================================================================
 -- [ESP Core Functions] 
--- (Оставлено без изменений)
 -- ====================================================================
 
 local function ClearDrawingsAndHighlights()
@@ -401,27 +355,43 @@ local function DrawPlayerInfo(Player)
 
     local Distance = math.floor((RootPart.Position - LocalPlayer.Character.PrimaryPart.Position).Magnitude)
     
-    local BottomY = math.max(HeadPos.Y, RootPos.Y) 
-    local CenterX = RootPos.X 
+    local TopY = HeadPos.Y
+    local BottomY = RootPos.Y 
+    local CenterX = HeadPos.X
     
-    local Y_Offset_Start = BottomY + 5 
+    local Name_Y_Position = TopY - 15
+    local Distance_Y_Position = BottomY + 15
 
     if IsESPNameEnabled and Drawing then
         local NameText = ESPDrawings[Player.Name .. "_Name"]
-        if not NameText then NameText = Drawing.new("Text") NameText.Size = 12 NameText.Outline = true NameText.Font = Drawing.Fonts.UI ESPDrawings[Player.Name .. "_Name"] = NameText end
+        if not NameText then 
+            NameText = Drawing.new("Text") 
+            NameText.Size = 12 
+            NameText.Outline = true 
+            NameText.Font = Drawing.Fonts.UI 
+            NameText.TextAlignment = Drawing.Alignments.Center 
+            ESPDrawings[Player.Name .. "_Name"] = NameText 
+        end
         
         NameText.Text = Player.Name
-        NameText.Position = Vector2.new(CenterX, Y_Offset_Start) 
+        NameText.Position = Vector2.new(CenterX, Name_Y_Position) 
         NameText.Color = ESPColor
         NameText.Visible = true
     end
     
     if IsESPDistanceEnabled and Drawing then
         local DistanceText = ESPDrawings[Player.Name .. "_Distance"]
-        if not DistanceText then DistanceText = Drawing.new("Text") DistanceText.Size = 10 DistanceText.Outline = true DistanceText.Font = Drawing.Fonts.UI ESPDrawings[Player.Name .. "_Distance"] = DistanceText end
+        if not DistanceText then 
+            DistanceText = Drawing.new("Text") 
+            DistanceText.Size = 10 
+            DistanceText.Outline = true 
+            DistanceText.Font = Drawing.Fonts.UI 
+            DistanceText.TextAlignment = Drawing.Alignments.Center 
+            ESPDrawings[Player.Name .. "_Distance"] = DistanceText 
+        end
         
         DistanceText.Text = tostring(Distance) .. "m"
-        DistanceText.Position = Vector2.new(CenterX, Y_Offset_Start + 15) 
+        DistanceText.Position = Vector2.new(CenterX, Distance_Y_Position) 
         DistanceText.Color = ESPColor
         DistanceText.Visible = true
     end
@@ -483,7 +453,7 @@ end
 
 if WindUi and WindUi.CreateWindow then 
     local Window = WindUi:CreateWindow({
-        Title = "DIX HUB V41.1 (Stable GUI)",
+        Title = "DIX HUB V41.6 (GUI Dependent)",
         Author = "by Dixyi",
         Folder = "DIX_Hub_V41_Final",
         OpenButton = { 
@@ -493,7 +463,7 @@ if WindUi and WindUi.CreateWindow then
     })
 
     -- Tags
-    Window:Tag({ Title = "V41.1", Icon = "mobile", Color = Color3.fromHex("#6b31ff") })
+    Window:Tag({ Title = "V41.6", Icon = "mobile", Color = Color3.fromHex("#6b31ff") })
 
     -- Tabs
     local CombatTab = Window:Tab({ Title = "COMBAT", Icon = "target", })
@@ -511,66 +481,83 @@ if WindUi and WindUi.CreateWindow then
         Default = IsAimbotEnabled,
         Callback = function(value)
             IsAimbotEnabled = value
-            if IsAimbotEnabled or IsSilentAimEnabled then StartAiming() else StopAiming() end
+            if IsAimbotEnabled then StartAiming() else StopAiming() end
         end
     })
     
-    AimSection:Toggle({ 
-        Flag = "SilentAimToggle", 
-        Title = "Silent AIM: ON/OFF", 
-        Desc = "Uses bypass structure. Trigger with **Touch/M1** or **Virtual Jump Button (Mobile)**.", 
-        Default = IsSilentAimEnabled, 
-        Callback = function(value) 
-            IsSilentAimEnabled = value 
-            if IsAimbotEnabled or IsSilentAimEnabled then StartAiming() else StopAiming() end
-        end 
-    })
-    
     -- Target Selector
-    local TargetSection = AimSection:Section({ Title = "Target Part Selector (Часть Тела)", }) 
+    local TargetSection = AimSection:Section({ Title = "Target Part Selector (Часть Тела) - FIX", }) 
 
-    local function updateTargetPart(newPart, state)
-        if not state then if newPart == AimTargetPartName then return end end
+    local function updateTargetPart(newPart, state, toggleFlag)
+        local allTargetFlags = {"Target_Head_Toggle", "Target_UpperTorso_Toggle", "Target_HRT_Toggle"}
+        
+        if not state then
+            local activeCount = 0
+            for _, flag in ipairs(allTargetFlags) do
+                if Window:GetToggle(flag):Get() then
+                    activeCount = activeCount + 1
+                end
+            end
+            
+            if activeCount == 1 and toggleFlag == "Target_Head_Toggle" and Target_Head then
+                Window:GetToggle(toggleFlag):Set(true) 
+                return
+            elseif activeCount == 1 and toggleFlag == "Target_UpperTorso_Toggle" and Target_UpperTorso then
+                Window:GetToggle(toggleFlag):Set(true)
+                return
+            elseif activeCount == 1 and toggleFlag == "Target_HRT_Toggle" and Target_HumanoidRootPart then
+                Window:GetToggle(toggleFlag):Set(true)
+                return
+            end
+        end
 
         Target_Head = false
         Target_UpperTorso = false
         Target_HumanoidRootPart = false
-
-        if newPart == "Head" then
-            Target_Head = true
-            AimTargetPartName = "Head"
-        elseif newPart == "UpperTorso" then
-            Target_UpperTorso = true
-            AimTargetPartName = "UpperTorso"
-        elseif newPart == "HumanoidRootPart" then
-            Target_HumanoidRootPart = true
-            AimTargetPartName = "HumanoidRootPart"
-        end
-
-        CurrentTarget = nil 
         
-        Window:GetToggle("Target_Head_Toggle"):Set(Target_Head)
-        Window:GetToggle("Target_UpperTorso_Toggle"):Set(Target_UpperTorso)
-        Window:GetToggle("Target_HRT_Toggle"):Set(Target_HumanoidRootPart)
+        for _, flag in ipairs(allTargetFlags) do
+            if flag == toggleFlag and state then
+                if flag == "Target_Head_Toggle" then
+                    Target_Head = true
+                    AimTargetPartName = "Head"
+                elseif flag == "Target_UpperTorso_Toggle" then
+                    Target_UpperTorso = true
+                    AimTargetPartName = "UpperTorso"
+                elseif flag == "Target_HRT_Toggle" then
+                    Target_HumanoidRootPart = true
+                    AimTargetPartName = "HumanoidRootPart"
+                end
+            elseif flag ~= toggleFlag then
+                Window:GetToggle(flag):Set(false)
+            end
+        end
+        
+        if not (Target_Head or Target_UpperTorso or Target_HumanoidRootPart) then
+             Target_Head = true 
+             AimTargetPartName = "Head"
+             Window:GetToggle("Target_Head_Toggle"):Set(true)
+        end
+        
+        CurrentTarget = nil 
     end
 
     TargetSection:Toggle({
         Flag = "Target_Head_Toggle",
         Title = "Target: Head (Голова)",
         Default = Target_Head,
-        Callback = function(value) updateTargetPart("Head", value) end
+        Callback = function(value) updateTargetPart("Head", value, "Target_Head_Toggle") end
     })
     TargetSection:Toggle({
         Flag = "Target_UpperTorso_Toggle",
         Title = "Target: Torso (Тело)",
         Default = Target_UpperTorso,
-        Callback = function(value) updateTargetPart("UpperTorso", value) end
+        Callback = function(value) updateTargetPart("UpperTorso", value, "Target_UpperTorso_Toggle") end
     })
     TargetSection:Toggle({
         Flag = "Target_HRT_Toggle",
         Title = "Target: Root (Корень)",
         Default = Target_HumanoidRootPart,
-        Callback = function(value) updateTargetPart("HumanoidRootPart", value) end
+        Callback = function(value) updateTargetPart("HumanoidRootPart", value, "Target_HRT_Toggle") end
     })
     
     -- Sliders/Toggles
@@ -604,7 +591,7 @@ if WindUi and WindUi.CreateWindow then
     AimSection:Toggle({ 
         Flag = "WallCheckToggle", 
         Title = "Wall Check (Visible Only)", 
-        Desc = "Aimbot/Silent Aim only targets players visible through walls.",
+        Desc = "Aimbot only targets players visible through walls. (Slows performance)",
         Default = IsWallCheckEnabled, 
         Callback = function(value) IsWallCheckEnabled = value end 
     })
@@ -640,7 +627,6 @@ if WindUi and WindUi.CreateWindow then
         Value = { Min = 1.0, Max = 10.0, Default = Hitbox_Multiplier, Rounding = 1 },
         Callback = function(value) 
             Hitbox_Multiplier = value 
-            -- Restart hitbox loop to apply new size immediately
             StopHitbox() 
             if Hitbox_Enabled then StartHitbox() end 
         end
@@ -665,7 +651,7 @@ if WindUi and WindUi.CreateWindow then
     ESPSection:Toggle({ 
         Flag = "ESPNameToggle", 
         Title = "Show Name ESP", 
-        Desc = "Displays the player's name below the model.",
+        Desc = "Displays the player's name above the model.",
         Default = IsESPNameEnabled, 
         Callback = function(value) IsESPNameEnabled = value end
     })
@@ -673,7 +659,7 @@ if WindUi and WindUi.CreateWindow then
     ESPSection:Toggle({ 
         Flag = "ESPDistToggle", 
         Title = "Show Distance ESP", 
-        Desc = "Displays the player's distance in meters below the name.",
+        Desc = "Displays the player's distance in meters below the model.",
         Default = IsESPDistanceEnabled, 
         Callback = function(value) IsESPDistanceEnabled = value end
     })
@@ -691,21 +677,18 @@ if WindUi and WindUi.CreateWindow then
 end
 
 -- ====================================================================
--- [[ 7. Initial Call - GUARANTEED STARTUP ]]
+-- [[ 7. Initial Call - DEPENDENT STARTUP ]]
 -- ====================================================================
 
--- Запускаем все функции, так как по умолчанию они Forced ON.
-StartAiming() 
-StartHitbox() 
-StartESP()    
-
--- Если GUI загрузился, мы должны остановить и снова запустить 
--- функции с учетом настроек GUI (хотя по умолчанию они совпадают).
+-- Запуск функций происходит ТОЛЬКО при успешной загрузке WindUi.
 if WindUi and WindUi.CreateWindow then 
-    StopAiming()
-    StopHitbox()
-    StopESP()
+    
     StartAiming() 
     StartHitbox() 
     StartESP() 
+    
+    print("[DIX INFO] Core modules Aimbot, Hitbox, and ESP activated via GUI initialization.")
+else
+    -- Выводим предупреждение, если не запустились.
+    print("[DIX WARNING] WindUI failed to load! Core functions were NOT started. Injection incomplete.")
 end
