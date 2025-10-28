@@ -1,10 +1,7 @@
 [DIX]:
 -- ====================================================================
--- [DIX] FINAL SCRIPT V41.6 (GUI-Dependent Startup)
--- FIX: Core functions only run if WindUI loads successfully.
--- FIX: Name placed above head, distance placed below root (V41.4).
--- FIX: Ensured exactly one target part is always selected in the GUI (V41.5).
--- REMOVED: Silent Aim Core.
+-- [DIX] FINAL SCRIPT V41.7 (Guaranteed Core Startup)
+-- FIX: Core functions now run REGARDLESS of WindUI loading success.
 -- ====================================================================
 
 -- 1. Load WindUi Library (UPDATED: Direct execution)
@@ -14,7 +11,7 @@ local success = pcall(function()
 end)
 
 if not success or not WindUi then
-    print("[DIX ERROR] WindUI failed to load! Core functions will NOT run.")
+    print("[DIX ERROR] WindUI failed to load! Core functions will start with default settings.")
     print("Error details (if any): " .. tostring(WindUi))
     WindUi = nil -- Убеждаемся, что WindUi равен nil при сбое
 end
@@ -34,10 +31,10 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 -- 3. Aimbot Settings
 local IsAimbotEnabled = true    -- Forced ON
 local AimingSpeed = 0.2 
-local IsWallCheckEnabled = false -- DIX DEFAULT: OFF (From V41.2 fix)
+local IsWallCheckEnabled = false 
 local IsTeamCheckEnabled = true 
 local MaxAimDistance = 500 
-local CurrentFOV = 180 -- DIX DEFAULT: 180 (From V41.2 fix)
+local CurrentFOV = 180 
 local AimTargetPartName = "Head" 
 local Target_Head = true 
 local Target_UpperTorso = false
@@ -93,7 +90,6 @@ end
 
 local function GetTargetPart(Character) 
     local part = Character:FindFirstChild(AimTargetPartName) 
-    -- Аварийное переключение на RootPart, если основная цель не найдена
     if not part and AimTargetPartName ~= "HumanoidRootPart" then
         return Character:FindFirstChild("HumanoidRootPart")
     end
@@ -236,11 +232,6 @@ local function StopAiming()
     end
     StopFOVVisual()
 end
-
--- ====================================================================
--- [SILENT AIM HANDLER] 
--- Блок Silent Aim Handler УДАЛЕН.
--- ====================================================================
 
 -- ====================================================================
 -- [Hitbox Expander Core Functions] 
@@ -453,7 +444,7 @@ end
 
 if WindUi and WindUi.CreateWindow then 
     local Window = WindUi:CreateWindow({
-        Title = "DIX HUB V41.6 (GUI Dependent)",
+        Title = "DIX HUB V41.7 (Guaranteed Core)",
         Author = "by Dixyi",
         Folder = "DIX_Hub_V41_Final",
         OpenButton = { 
@@ -463,7 +454,7 @@ if WindUi and WindUi.CreateWindow then
     })
 
     -- Tags
-    Window:Tag({ Title = "V41.6", Icon = "mobile", Color = Color3.fromHex("#6b31ff") })
+    Window:Tag({ Title = "V41.7", Icon = "mobile", Color = Color3.fromHex("#6b31ff") })
 
     -- Tabs
     local CombatTab = Window:Tab({ Title = "COMBAT", Icon = "target", })
@@ -677,18 +668,24 @@ if WindUi and WindUi.CreateWindow then
 end
 
 -- ====================================================================
--- [[ 7. Initial Call - DEPENDENT STARTUP ]]
+-- [[ 7. Initial Call - GUARANTEED CORE STARTUP ]]
 -- ====================================================================
 
--- Запуск функций происходит ТОЛЬКО при успешной загрузке WindUi.
+-- Запускаем функции с настройками по умолчанию, чтобы гарантировать работу,
+-- независимо от сбоя GUI.
+StartAiming() 
+StartHitbox() 
+StartESP()    
+
 if WindUi and WindUi.CreateWindow then 
-    
+    -- Если GUI успешно запустился, перезапускаем функции для применения его настроек.
+    StopAiming()
+    StopHitbox()
+    StopESP()
     StartAiming() 
     StartHitbox() 
     StartESP() 
-    
-    print("[DIX INFO] Core modules Aimbot, Hitbox, and ESP activated via GUI initialization.")
+    print("[DIX INFO] Core modules Aimbot, Hitbox, and ESP activated and synced with GUI.")
 else
-    -- Выводим предупреждение, если не запустились.
-    print("[DIX WARNING] WindUI failed to load! Core functions were NOT started. Injection incomplete.")
+    print("[DIX INFO] Core modules Aimbot, Hitbox, and ESP activated with default settings. GUI not available.")
 end
