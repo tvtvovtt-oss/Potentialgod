@@ -1,158 +1,187 @@
 -- ====================================================================
--- [DIX] V48.0 (FINAL VERSION: NATIVE GUI)
--- ✅ ГАРАНТИЯ: Aimbot, Hitbox, Highlight ESP + GUI, который не блокируется.
+-- [DIX] V49.0 - ЧИСТЫЙ CORE СМЕЙТ (на основе WindUI)
+-- ✅ Сохранена рабочая загрузка WindUI (из гуи.txt)
+-- ✅ Добавлена чистая структура для Aimbot, Hitbox, ESP и Noclip
+-- ❌ Удалены все Halloween/PrismaticaX зависимости для стабильности
 -- ====================================================================
 
--- 1. СЕРВИСЫ
+-- Load WindUi Library (Единственная рабочая строка загрузки GUI, как в вашем файле)
+local WindUi = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+
+-- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
-local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait() 
-local Camera = Workspace.CurrentCamera 
-
--- 2. ГЛОБАЛЬНЫЕ НАСТРОЙКИ (управляются GUI)
-local IsAimbotEnabled = true    
-local AimingSpeed = 0.2 
-local AimTargetPartName = "Head" 
-local MaxAimDistance = 500 
-local CurrentFOV = 180 
-local IsTeamCheckEnabled = true 
-
-local Hitbox_Enabled = true 
-local Hitbox_Multiplier = 2.0 
-local Hitbox_Parts_To_Change = {"HumanoidRootPart", "Head"} 
-local Original_Sizes = {} 
-
-local IsESPEnabled = true 
-local ESPHighlights = {} 
-
-local AimConnection = nil
-local ESPConnection = nil
-local Hitbox_Connections = {} 
+local LocalPlayer = Players.LocalPlayer
+local Humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
 
 -- ====================================================================
--- 3. ФУНКЦИИ ЯДРА (Ваш проверенный рабочий код)
+-- 1. ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ (Состояние функций)
 -- ====================================================================
 
--- (Aimbot logic StartAiming/StopAiming goes here)
-local function GetTargetPart(Character) return Character:FindFirstChild(AimTargetPartName) or Character:FindFirstChild("HumanoidRootPart") end
-local function IsTargetValid(TargetPart)
-    local Player = Players:GetPlayerFromCharacter(TargetPart.Parent)
-    if not Player or Player == LocalPlayer then return false end
-    if IsTeamCheckEnabled and LocalPlayer.Team and Player.Team and LocalPlayer.Team == Player.Team then return false end
-    return true
-end
--- (Полные рабочие функции StartAiming, StopAiming, StartHitbox, StopHitbox, StartESP, StopESP здесь)
+_G.aimbotEnabled = false
+_G.aimbotFOV = 200
+_G.hitboxEnabled = false
+_G.espEnabled = false
+_G.teamCheckEnabled = true
+_G.noclipEnabled = false
+_G.speedConnection = nil -- Для управления скоростью/прыжком
+_G.aimConnection = nil   -- Для управления циклом Aimbot
 
-local function StartAiming()
-    if AimConnection then return end 
-    AimConnection = RunService.RenderStepped:Connect(function()
-        if not IsAimbotEnabled then return end
-        -- (Aim Logic)
-    end)
-    print("[DIX INFO] Aimbot Activated.")
-end
-local function StopAiming() if AimConnection then AimConnection:Disconnect() AimConnection = nil end end
+-- ====================================================================
+-- 2. ФУНКЦИИ ЯДРА (Сюда вы добавите реальный рабочий код)
+-- ====================================================================
 
-local function StartHitbox() 
-    -- (Hitbox Logic)
-    print("[DIX INFO] Hitbox Expander Activated.") 
+-- COMBAT
+local function StartAimbot() 
+    print("[DIX: Aimbot] Аимбот ВКЛ. (ДОБАВЬТЕ ЛОГИКУ СЮДА)")
+    -- Пример: _G.aimConnection = RunService.RenderStepped:Connect(function() ... end)
 end
-local function StopHitbox() 
-    -- (Hitbox Logic)
-    print("[DIX INFO] Hitbox Expander Deactivated.") 
+local function StopAimbot()
+    print("[DIX: Aimbot] Аимбот ВЫКЛ.")
+    -- Пример: if _G.aimConnection then _G.aimConnection:Disconnect() _G.aimConnection = nil end
 end
 
+local function StartHitbox()
+    print("[DIX: Hitbox] Экспандер ВКЛ. (ДОБАВЬТЕ ЛОГИКУ СЮДА)")
+    -- Логика: изменение размера Hitbox
+end
+local function StopHitbox()
+    print("[DIX: Hitbox] Экспандер ВЫКЛ.")
+    -- Логика: возврат оригинального размера Hitbox
+end
+
+-- VISUAL
 local function StartESP()
-    if ESPConnection then return end
-    ESPConnection = RunService.Heartbeat:Connect(function()
-        if not IsESPEnabled then return end
-        -- (ESP Logic)
-    end)
-    print("[DIX INFO] Highlight ESP Activated.")
+    print("[DIX: ESP] ESP ВКЛ. (ДОБАВЬТЕ ЛОГИКУ СЮДА)")
+    -- Логика: цикл для создания Highlight, Box, Name ESP
 end
-local function StopESP() if ESPConnection then ESPConnection:Disconnect() ESPConnection = nil end end
+local function StopESP()
+    print("[DIX: ESP] ESP ВЫКЛ.")
+    -- Логика: удаление всех созданных элементов ESP
+end
+
+-- MOVEMENT
+local function EnableNoclip()
+    print("[DIX: Noclip] Noclip ВКЛ. (ДОБАВЬТЕ ЛОГИКУ СЮДА)")
+    -- Логика: Humanoid.PlatformStand = true; noclipConnection = LocalPlayer.Character.ChildAdded:Connect(...)
+end
+local function DisableNoclip()
+    print("[DIX: Noclip] Noclip ВЫКЛ.")
+    -- Логика: Humanoid.PlatformStand = false; noclipConnection:Disconnect()
+end
 
 -- ====================================================================
--- 4. NATIVE GUI (Гарантия загрузки)
+-- 3. ОСНОВНОЕ ОКНО GUI (WindUI)
 -- ====================================================================
 
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "DIX_FINAL_HUB"
-ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+local Window = WindUi:CreateWindow({
+    Title = "DIX Core Hub", -- Изменено название
+    Icon = "shield",
+    Author = "By DIX",
+    Size = UDim2.fromOffset(450, 400),
+    Theme = "Dark", 
+    Acrylic = false,
+    HideSearchBar = true,
+    SideBarWidth = 150,
+    User = { Enabled = true, Anonymous = false }
+})
 
-local Frame = Instance.new("Frame")
-Frame.Size = UDim2.new(0, 220, 0, 200)
-Frame.Position = UDim2.new(0.5, -110, 0.5, -100)
-Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 50) 
-Frame.BorderColor3 = Color3.fromRGB(0, 255, 255) 
-Frame.BorderSizePixel = 2
-Frame.Parent = ScreenGui
+-- ====================================================================
+-- 4. ВКЛАДКИ И СЕКЦИИ (Упрощенная структура)
+-- ====================================================================
 
-local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, 0, 0, 30)
-Title.Text = "DIX V48.0 - GUARANTEED UI"
-Title.Font = Enum.Font.Code
-Title.TextSize = 18
-Title.BackgroundTransparency = 0.9
-Title.BackgroundColor3 = Color3.fromRGB(0, 50, 50)
-Title.Parent = Frame
+local Tabs = {
+    Main = Window:Tab({ Title = "Основное", Icon = "toggle-right" }),
+    Combat = Window:Tab({ Title = "Бой", Icon = "sword" }),
+    Visual = Window:Tab({ Title = "Визуал", Icon = "palette" }),
+    Movement = Window:Tab({ Title = "Движение", Icon = "zap" }),
+    Settings = Window:Tab({ Title = "Настройки", Icon = "settings" })
+}
 
-local Layout = Instance.new("UIListLayout")
-Layout.Padding = UDim.new(0, 8)
-Layout.VerticalAlignment = Enum.VerticalAlignment.Top
-Layout.Parent = Frame
+local AimbotSection = Tabs.Combat:Section({ Title = "Аимбот (Aim)", Opened = true })
+local HitboxSection = Tabs.Combat:Section({ Title = "Хитбокс (Hitbox)", Opened = true })
+local EspSection = Tabs.Visual:Section({ Title = "ESP", Opened = true })
+local MovementPlayerSection = Tabs.Movement:Section({ Title = "Персонаж", Opened = true })
 
--- Helper function for Toggle buttons
-local function createToggleButton(text, defaultValue, callback)
-    local Button = Instance.new("TextButton")
-    Button.Size = UDim2.new(0.9, 0, 0, 25)
-    Button.Text = text .. ": " .. (defaultValue and "ON" or "OFF")
-    Button.Font = Enum.Font.SourceSansBold
-    Button.TextSize = 16
-    Button.BackgroundColor3 = defaultValue and Color3.fromRGB(60, 255, 60) or Color3.fromRGB(255, 60, 60)
-    Button.Parent = Frame
+-- ====================================================================
+-- 5. ЭЛЕМЕНТЫ УПРАВЛЕНИЯ
+-- ====================================================================
 
-    local currentValue = defaultValue
-
-    local function updateButton()
-        Button.Text = text .. ": " .. (currentValue and "ON" or "OFF")
-        Button.BackgroundColor3 = currentValue and Color3.fromRGB(60, 255, 60) or Color3.fromRGB(255, 60, 60)
+-- COMBAT: Aimbot
+AimbotSection:Toggle({
+    Title = "Aimbot",
+    Desc = "Автоматическое наведение на цель.",
+    Default = _G.aimbotEnabled,
+    Callback = function(value)
+        _G.aimbotEnabled = value
+        if value then StartAimbot() else StopAimbot() end
     end
+})
+AimbotSection:Toggle({
+    Title = "Проверка команды (Team Check)",
+    Desc = "Игнорировать игроков из своей команды.",
+    Default = _G.teamCheckEnabled,
+    Callback = function(value)
+        _G.teamCheckEnabled = value
+    end
+})
+AimbotSection:Slider({
+    Title = "Поле зрения (FOV)",
+    Default = 200,
+    Min = 50,
+    Max = 800,
+    Callback = function(value)
+        _G.aimbotFOV = value
+    end
+})
 
-    Button.MouseButton1Click:Connect(function()
-        currentValue = not currentValue
-        updateButton()
-        callback(currentValue)
-    end)
-    return Button
-end
+-- COMBAT: Hitbox
+HitboxSection:Toggle({
+    Title = "Hitbox Expander",
+    Desc = "Увеличение хитбокса противников.",
+    Default = _G.hitboxEnabled,
+    Callback = function(value)
+        _G.hitboxEnabled = value
+        if value then StartHitbox() else StopHitbox() end
+    end
+})
 
--- Кнопки
-createToggleButton("Aimbot [Combat]", IsAimbotEnabled, function(value)
-    IsAimbotEnabled = value
-    if value then StartAiming() else StopAiming() end
-end)
-createToggleButton("Hitbox Expander x2.0", Hitbox_Enabled, function(value)
-    Hitbox_Enabled = value
-    if value then StartHitbox() else StopHitbox() end
-end)
-createToggleButton("Highlight ESP [Visual]", IsESPEnabled, function(value)
-    IsESPEnabled = value
-    if value then StartESP() else StopESP() end
-end)
-createToggleButton("Team Check", IsTeamCheckEnabled, function(value)
-    IsTeamCheckEnabled = value
-end)
+-- VISUAL: ESP
+EspSection:Toggle({
+    Title = "Highlight ESP",
+    Desc = "Подсветка игроков.",
+    Default = _G.espEnabled,
+    Callback = function(value)
+        _G.espEnabled = value
+        if value then StartESP() else StopESP() end
+    end
+})
 
-print("[DIX SUCCESS] Native Mini Hub GUI Created and Bound.")
+-- MOVEMENT: Player
+MovementPlayerSection:Toggle({
+    Title = "Noclip",
+    Desc = "Проход сквозь стены.",
+    Default = _G.noclipEnabled,
+    Callback = function(value)
+        _G.noclipEnabled = value
+        if value then EnableNoclip() else DisableNoclip() end
+    end
+})
+MovementPlayerSection:Slider({
+    Title = "Скорость бега (WalkSpeed)",
+    Default = 16,
+    Min = 16,
+    Max = 100,
+    Callback = function(value)
+        if LocalPlayer.Character and Humanoid then
+            Humanoid.WalkSpeed = value
+        end
+    end
+})
 
--- ====================================================================
--- 5. ПЕРВЫЙ ЗАПУСК
--- ====================================================================
+-- SETTINGS TAB
+local ThemesSection = Tabs.Settings:Section({ Title = "Кастомизация", Opened = true })
+ThemesSection:ThemeChanger({ Title = "Тема GUI", Desc = "Выберите тему для интерфейса." })
 
-task.spawn(function()
-    if IsAimbotEnabled then StartAiming() end
-    if Hitbox_Enabled then StartHitbox() end
-    if IsESPEnabled then StartESP() end
-end)
+print("[DIX SUCCESS] WindUI Core Hub Loaded.")
