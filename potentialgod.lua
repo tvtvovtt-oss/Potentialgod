@@ -1,19 +1,23 @@
 -- ====================================================================
--- [DIX] V67.0 - Минимизированная версия (Aimbot, Hitbox, ESP)
+-- [DIX] V71.0 - Минимальная версия
 -- ====================================================================
 
 local WindUi = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
 -- ====================================================================
--- ИНИЦИАЛИЗАЦИЯ СЕРВИСОВ И ПЕРЕМЕННЫХ
+-- ИНИЦИАЛИЗАЦИЯ
 -- ====================================================================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
+local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 local RaycastParams = RaycastParams.new()
 local CoreGui = game:GetService("CoreGui")
+
+local ConfigFileName = "DIX_v70_Config.json"
+local GUI_Elements = {}
 
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local Humanoid = Character:FindFirstChildOfClass("Humanoid")
@@ -28,6 +32,7 @@ _G.aimbotFOV = 150
 _G.fovCircleEnabled = true 
 _G.LockedTarget = nil     
 _G.aimbotSmoothness = 0.15 
+_G.configTestToggle = false
 
 _G.AimConnection = nil 
 _G.ESPConnection = nil
@@ -41,7 +46,7 @@ RaycastParams.FilterDescendantsInstances = {Character}
 RaycastParams.FilterType = Enum.RaycastFilterType.Exclude
 
 -- ====================================================================
--- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+-- ХЕЛПЕРЫ
 -- ====================================================================
 
 local function GetTargetPart(Char) return Char:FindFirstChild("Head") or Char:FindFirstChild("HumanoidRootPart") end
@@ -67,7 +72,7 @@ local function IsVisible(TargetPart)
 end
 
 -- ====================================================================
--- ЯДРО AIMBOT
+-- AIMBOT
 -- ====================================================================
 
 local function FindNearestTarget()
@@ -96,12 +101,17 @@ local function FindNearestTarget()
 end
 local function StartAimbot() 
     if not LocalPlayer.Character or _G.AimConnection then return end 
+    local camScripts = LocalPlayer.PlayerScripts:FindFirstChild("CameraModule")
+    if camScripts then camScripts.Enabled = false end
+    
     _G.AimConnection = RunService.RenderStepped:Connect(function()
         if not _G.aimbotEnabled or not Camera.CFrame then return end 
         local AimPart = FindNearestTarget()
         if AimPart then 
             local TargetCFrame = CFrame.new(Camera.CFrame.Position, AimPart.Position)
-            Camera.CFrame = Camera.CFrame:Lerp(TargetCFrame, _G.aimbotSmoothness) 
+            pcall(function()
+                Camera.CFrame = Camera.CFrame:Lerp(TargetCFrame, _G.aimbotSmoothness) 
+            end)
         else 
             _G.LockedTarget = nil 
         end
@@ -110,10 +120,12 @@ end
 local function StopAimbot()
     if _G.AimConnection then _G.AimConnection:Disconnect() _G.AimConnection = nil end
     _G.LockedTarget = nil 
+    local camScripts = LocalPlayer.PlayerScripts:FindFirstChild("CameraModule")
+    if camScripts then camScripts.Enabled = true end
 end
 
 -- ====================================================================
--- ЯДРО HITBOX
+-- HITBOX
 -- ====================================================================
 
 local function ApplyHitboxExpansion(Player)
@@ -177,7 +189,7 @@ local function StopHitbox()
 end
 
 -- ====================================================================
--- ЯДРО ESP
+-- ESP
 -- ====================================================================
 
 local function CreateESPLabel(Player)
@@ -191,7 +203,7 @@ local function CreateESPLabel(Player)
     local NameLabel = Instance.new("TextLabel")
     NameLabel.BackgroundTransparency = 1
     NameLabel.Size = UDim2.new(0, 150, 0, 20)
-    NameLabel.Font = Enum.Font.SourceSans
+    NameLabel.Font = Enum.Font.Code 
     NameLabel.TextSize = 14
     NameLabel.TextColor3 = Color3.fromRGB(0, 255, 255)
     NameLabel.TextStrokeTransparency = 0.5
@@ -204,6 +216,7 @@ local function CreateESPLabel(Player)
     local DistanceLabel = NameLabel:Clone()
     DistanceLabel.TextSize = 12
     DistanceLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    DistanceLabel.Font = Enum.Font.Code 
     DistanceLabel.Name = "DistanceLabel"
     DistanceLabel.Parent = ScreenG
     
@@ -228,7 +241,6 @@ local function StartESP()
             local Root = character and character:FindFirstChild("HumanoidRootPart")
             local isValid = character and Root and IsTargetValid(Root)
             
-            -- HIGHLIGHT
             if isValid then
                 if not (_G.ESPHighlights[player] and _G.ESPHighlights[player].Parent == character) then
                     local highlight = Instance.new("Highlight")
@@ -244,7 +256,6 @@ local function StartESP()
                 _G.ESPHighlights[player].Enabled = false
             end
             
-            -- TEXT/DISTANCE
             local labelGui = _G.ESPLabels[player]
             if isValid and Head then
                 if not labelGui then labelGui = CreateESPLabel(player) end
@@ -263,8 +274,8 @@ local function StartESP()
                         NameLabel.Text = player.Name
                         DistanceLabel.Text = distance .. "м"
                         
-                        NameLabel.Position = UDim2.new(0, CenterX - NameLabel.AbsoluteSize.X / 2, 0, CenterY - 40)
-                        DistanceLabel.Position = UDim2.new(0, CenterX - DistanceLabel.AbsoluteSize.X / 2, 0, CenterY + 10)
+                        NameLabel.Position = UDim2.new(0, CenterX - NameLabel.AbsoluteSize.X / 2, 0, CenterY - 30)
+                        DistanceLabel.Position = UDim2.new(0, CenterX - DistanceLabel.AbsoluteSize.X / 2, 0, CenterY + 5)
                     end
                 else
                     labelGui.Enabled = false 
@@ -284,7 +295,7 @@ local function StopESP()
 end
 
 -- ====================================================================
--- ЯДРО FOV CIRCLE
+-- FOV CIRCLE
 -- ====================================================================
 
 local function StartFOVCircle()
@@ -306,12 +317,92 @@ local function StopFOVCircle()
     if _G.FOVCircleGui then _G.FOVCircleGui:Destroy() _G.FOVCircleGui = nil end
 end
 
+-- ====================================================================
+-- КОНФИГ
+-- ====================================================================
+
+local function GetConfigData()
+    return {
+        aimbotEnabled = _G.aimbotEnabled,
+        hitboxEnabled = _G.hitboxEnabled,
+        espEnabled = _G.espEnabled,
+        teamCheckEnabled = _G.teamCheckEnabled,
+        wallCheckEnabled = _G.wallCheckEnabled,
+        aimbotFOV = _G.aimbotFOV,
+        aimbotSmoothness = _G.aimbotSmoothness,
+        fovCircleEnabled = _G.fovCircleEnabled,
+        configTestToggle = _G.configTestToggle,
+    }
+end
+
+local function ApplyConfig(config)
+    -- Глобальные переменные
+    _G.aimbotEnabled = config.aimbotEnabled ~= nil and config.aimbotEnabled or _G.aimbotEnabled
+    _G.hitboxEnabled = config.hitboxEnabled ~= nil and config.hitboxEnabled or _G.hitboxEnabled
+    _G.espEnabled = config.espEnabled ~= nil and config.espEnabled or _G.espEnabled
+    _G.teamCheckEnabled = config.teamCheckEnabled ~= nil and config.teamCheckEnabled or _G.teamCheckEnabled
+    _G.wallCheckEnabled = config.wallCheckEnabled ~= nil and config.wallCheckEnabled or _G.wallCheckEnabled
+    _G.fovCircleEnabled = config.fovCircleEnabled ~= nil and config.fovCircleEnabled or _G.fovCircleEnabled
+    _G.aimbotFOV = config.aimbotFOV or _G.aimbotFOV
+    _G.aimbotSmoothness = config.aimbotSmoothness or _G.aimbotSmoothness
+    _G.configTestToggle = config.configTestToggle ~= nil and config.configTestToggle or _G.configTestToggle
+
+    -- Логика чита
+    StopAimbot()
+    if _G.aimbotEnabled then StartAimbot() end
+    StopHitbox()
+    if _G.hitboxEnabled then StartHitbox() end
+    StopESP()
+    if _G.espEnabled then StartESP() end
+    StopFOVCircle()
+    if _G.fovCircleEnabled then StartFOVCircle() end
+
+    -- GUI
+    if GUI_Elements.AimbotToggle then GUI_Elements.AimbotToggle:Set(_G.aimbotEnabled) end
+    if GUI_Elements.HitboxToggle then GUI_Elements.HitboxToggle:Set(_G.hitboxEnabled) end
+    if GUI_Elements.ESPToggle then GUI_Elements.ESPToggle:Set(_G.espEnabled) end
+    if GUI_Elements.TeamCheckToggle then GUI_Elements.TeamCheckToggle:Set(_G.teamCheckEnabled) end
+    if GUI_Elements.WallCheckToggle then GUI_Elements.WallCheckToggle:Set(_G.wallCheckEnabled) end
+    if GUI_Elements.FOVCircleToggle then GUI_Elements.FOVCircleToggle:Set(_G.fovCircleEnabled) end
+    if GUI_Elements.SmoothnessSlider then GUI_Elements.SmoothnessSlider:Set(_G.aimbotSmoothness) end
+    if GUI_Elements.FOVSlider then GUI_Elements.FOVSlider:Set(_G.aimbotFOV) end
+    if GUI_Elements.ConfigTestToggle then GUI_Elements.ConfigTestToggle:Set(_G.configTestToggle) end
+end
+
+local function SaveConfig()
+    if not pcall(function() return writefile end) or not writefile then 
+        warn("[DIX: Config] Executor не поддерживает writefile.")
+        return 
+    end
+    local data = GetConfigData()
+    local json = HttpService:JSONEncode(data)
+    writefile(ConfigFileName, json)
+end
+
+local function LoadConfig()
+    if not pcall(function() return readfile end) or not readfile then
+        warn("[DIX: Config] Executor не поддерживает readfile.")
+        return
+    end
+    local success, json = pcall(readfile, ConfigFileName)
+    if not success or not json or json == "" then
+        return
+    end
+    
+    local success, config = pcall(HttpService.JSONDecode, HttpService, json)
+    if success and type(config) == "table" then
+        ApplyConfig(config)
+    else
+        warn("[DIX: Config] Ошибка декодирования конфига.")
+    end
+end
+
 
 -- ====================================================================
--- GUI (WIND UI)
+-- GUI
 -- ====================================================================
 local Window = WindUi:CreateWindow({
-    Title = "DIX V67.0 | Minimized Core", 
+    Title = "DIX V71.0", 
     Icon = "shield",
     Author = "By DIX",
     Size = UDim2.fromOffset(450, 400),
@@ -325,32 +416,35 @@ local Tabs = {
     Settings = Window:Tab({ Title = "Настройки", Icon = "settings" })
 }
 
-local AimbotSection = Tabs.Combat:Section({ Title = "Аимбот (Aim)", Opened = true })
-AimbotSection:Toggle({
-    Title = "Aimbot [Активация]", Default = _G.aimbotEnabled,
+-- COMBAT TAB
+local AimbotSection = Tabs.Combat:Section({ Title = "Аимбот", Opened = true })
+GUI_Elements.AimbotToggle = AimbotSection:Toggle({
+    Title = "Aimbot [ON/OFF]",
+    Default = _G.aimbotEnabled,
     Callback = function(value)
         _G.aimbotEnabled = value
         if value then StartAimbot() else StopAimbot() end
     end
 })
-AimbotSection:Toggle({ Title = "Проверка команды", Default = _G.teamCheckEnabled, Callback = function(value) _G.teamCheckEnabled = value end })
-AimbotSection:Toggle({ Title = "Валлчек (Wallcheck)", Default = _G.wallCheckEnabled, Callback = function(value) _G.wallCheckEnabled = value end })
-AimbotSection:Toggle({ 
-    Title = "Круг FOV (Visual)", Default = _G.fovCircleEnabled,
+GUI_Elements.TeamCheckToggle = AimbotSection:Toggle({ Title = "Проверка команды", Default = _G.teamCheckEnabled, Callback = function(value) _G.teamCheckEnabled = value end })
+GUI_Elements.WallCheckToggle = AimbotSection:Toggle({ Title = "Валлчек", Default = _G.wallCheckEnabled, Callback = function(value) _G.wallCheckEnabled = value end })
+GUI_Elements.FOVCircleToggle = AimbotSection:Toggle({ 
+    Title = "Круг FOV",
+    Default = _G.fovCircleEnabled,
     Callback = function(value)
         _G.fovCircleEnabled = value
         if value then StartFOVCircle() else StopFOVCircle() end
     end
 })
-AimbotSection:Slider({
-    Title = "Плавность наводки (Smoothness)",
-    Desc = "Низкие значения (0.05-0.15) делают наводку плавной.",
+GUI_Elements.SmoothnessSlider = AimbotSection:Slider({
+    Title = "Плавность",
+    Desc = "0.05-0.15 = плавно. 0.2+ = резко.",
     Step = 0.05, ValueFormat = "%.2f", 
     Value = { Min = 0.05, Max = 1.0, Default = _G.aimbotSmoothness },
     Callback = function(value) _G.aimbotSmoothness = value end
 })
-AimbotSection:Slider({
-    Title = "Поле зрения (FOV)",
+GUI_Elements.FOVSlider = AimbotSection:Slider({
+    Title = "FOV",
     Step = 5, 
     Value = { Min = 5, Max = 360, Default = _G.aimbotFOV },
     Callback = function(value)
@@ -361,8 +455,8 @@ AimbotSection:Slider({
     end
 })
 
-local HitboxSection = Tabs.Combat:Section({ Title = "Хитбокс (Hitbox)", Opened = true })
-HitboxSection:Toggle({
+local HitboxSection = Tabs.Combat:Section({ Title = "Хитбокс", Opened = true })
+GUI_Elements.HitboxToggle = HitboxSection:Toggle({
     Title = "Hitbox Expander", Default = _G.hitboxEnabled,
     Callback = function(value)
         _G.hitboxEnabled = value
@@ -370,10 +464,10 @@ HitboxSection:Toggle({
     end
 })
 
+-- VISUAL TAB
 local EspSection = Tabs.Visual:Section({ Title = "ESP", Opened = true })
-EspSection:Toggle({
-    Title = "Highlight ESP + Text",
-    Desc = "Включает подсветку игроков, отображение ника и расстояния.",
+GUI_Elements.ESPToggle = EspSection:Toggle({
+    Title = "Highlight + Text (Code Font)",
     Default = _G.espEnabled,
     Callback = function(value)
         _G.espEnabled = value
@@ -381,9 +475,37 @@ EspSection:Toggle({
     end
 })
 
-local ThemesSection = Tabs.Settings:Section({ Title = "Настройки GUI", Opened = true })
-ThemesSection:ThemeChanger({ Title = "Тема GUI", Desc = "Выберите тему для интерфейса." })
+-- SETTINGS TAB
+local ThemesSection = Tabs.Settings:Section({ Title = "Тема GUI", Opened = true })
+ThemesSection:ThemeChanger({ Title = "Тема", Desc = "Выбрать тему." })
 
+local ConfigSection = Tabs.Settings:Section({ Title = "Конфиг", Opened = true })
+
+-- ТЕСТОВЫЙ ЭЛЕМЕНТ
+GUI_Elements.ConfigTestToggle = ConfigSection:Toggle({
+    Title = "Тест Тоггл",
+    Desc = "Сохраняется/загружается.",
+    Default = _G.configTestToggle,
+    Callback = function(value)
+        _G.configTestToggle = value
+    end
+})
+
+ConfigSection:Button({
+    Title = "Сохранить Конфиг",
+    Desc = "В " .. ConfigFileName,
+    Callback = function()
+        SaveConfig()
+    end
+})
+
+ConfigSection:Button({
+    Title = "Загрузить Конфиг",
+    Desc = "Из " .. ConfigFileName,
+    Callback = function()
+        LoadConfig()
+    end
+})
 
 -- АВТО-ЗАПУСК
 if _G.fovCircleEnabled then StartFOVCircle() end
