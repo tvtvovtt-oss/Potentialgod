@@ -1,6 +1,7 @@
 -- ====================================================================
--- [DIX] V75.0 - КРИТИЧЕСКИЙ ФИКС: Загрузка GUI (WindUi)
--- ✅ ИСПРАВЛЕНО: Ссылка для загрузки WindUi заменена на альтернативную/старую.
+-- [DIX] V76.0 - ФИКС: Удалена вся логика конфигурации (writefile/readfile)
+-- ✅ Вся логика config (Save/Load) удалена.
+-- ✅ Ссылка на GUI возвращена к самой старой версии.
 -- ====================================================================
 
 -- КРИТИЧЕСКИЙ ФИКС: Возвращаем старую, часто более надежную ссылку для загрузки WindUi.
@@ -12,13 +13,12 @@ local WindUi = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/rel
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
-local HttpService = game:GetService("HttpService")
+-- HttpService удален, так как он не нужен без конфигов
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 local RaycastParams = RaycastParams.new()
 local CoreGui = game:GetService("CoreGui")
 
-local ConfigFileName = "DIX_v75_Config.json" -- Обновлен номер версии
 local GUI_Elements = {}
 
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
@@ -35,7 +35,6 @@ _G.fovCircleEnabled = true
 _G.LockedTarget = nil     
 _G.aimbotSmoothness = 0.15 
 _G.aimbotMaxDistance = 500
-_G.configTestToggle = false
 
 _G.AimConnection = nil 
 _G.ESPConnection = nil
@@ -359,94 +358,10 @@ local function StopFOVCircle()
 end
 
 -- ====================================================================
--- КОНФИГ
--- ====================================================================
-
-local function GetConfigData()
-    return {
-        aimbotEnabled = _G.aimbotEnabled,
-        hitboxEnabled = _G.hitboxEnabled,
-        espEnabled = _G.espEnabled,
-        teamCheckEnabled = _G.teamCheckEnabled,
-        wallCheckEnabled = _G.wallCheckEnabled,
-        aimbotFOV = _G.aimbotFOV,
-        aimbotSmoothness = _G.aimbotSmoothness,
-        fovCircleEnabled = _G.fovCircleEnabled,
-        aimbotMaxDistance = _G.aimbotMaxDistance,
-        configTestToggle = _G.configTestToggle,
-    }
-end
-
-local function ApplyConfig(config)
-    -- Глобальные переменные
-    _G.aimbotEnabled = config.aimbotEnabled ~= nil and config.aimbotEnabled or _G.aimbotEnabled
-    _G.hitboxEnabled = config.hitboxEnabled ~= nil and config.hitboxEnabled or _G.hitboxEnabled
-    _G.espEnabled = config.espEnabled ~= nil and config.espEnabled or _G.espEnabled
-    _G.teamCheckEnabled = config.teamCheckEnabled ~= nil and config.teamCheckEnabled or _G.teamCheckEnabled
-    _G.wallCheckEnabled = config.wallCheckEnabled ~= nil and config.wallCheckEnabled or _G.wallCheckEnabled
-    _G.fovCircleEnabled = config.fovCircleEnabled ~= nil and config.fovCircleEnabled or _G.fovCircleEnabled
-    _G.aimbotMaxDistance = config.aimbotMaxDistance or _G.aimbotMaxDistance
-    _G.aimbotFOV = config.aimbotFOV or _G.aimbotFOV
-    _G.aimbotSmoothness = config.aimbotSmoothness or _G.aimbotSmoothness
-    _G.configTestToggle = config.configTestToggle ~= nil and config.configTestToggle or _G.configTestToggle
-
-    -- Логика чита
-    StopAimbot()
-    if _G.aimbotEnabled then StartAimbot() end
-    StopHitbox()
-    if _G.hitboxEnabled then StartHitbox() end
-    StopESP()
-    if _G.espEnabled then StartESP() end
-    StopFOVCircle()
-    if _G.fovCircleEnabled then StartFOVCircle() end
-
-    -- GUI
-    if GUI_Elements.AimbotToggle then GUI_Elements.AimbotToggle:Set(_G.aimbotEnabled) end
-    if GUI_Elements.HitboxToggle then GUI_Elements.HitboxToggle:Set(_G.hitboxEnabled) end
-    if GUI_Elements.ESPToggle then GUI_Elements.ESPToggle:Set(_G.espEnabled) end
-    if GUI_Elements.TeamCheckToggle then GUI_Elements.TeamCheckToggle:Set(_G.teamCheckEnabled) end
-    if GUI_Elements.WallCheckToggle then GUI_Elements.WallCheckToggle:Set(_G.wallCheckEnabled) end
-    if GUI_Elements.FOVCircleToggle then GUI_Elements.FOVCircleToggle:Set(_G.fovCircleEnabled) end
-    if GUI_Elements.SmoothnessSlider then GUI_Elements.SmoothnessSlider:Set(_G.aimbotSmoothness) end
-    if GUI_Elements.FOVSlider then GUI_Elements.FOVSlider:Set(_G.aimbotFOV) end
-    if GUI_Elements.DistanceSlider then GUI_Elements.DistanceSlider:Set(_G.aimbotMaxDistance) end
-    if GUI_Elements.ConfigTestToggle then GUI_Elements.ConfigTestToggle:Set(_G.configTestToggle) end
-end
-
-local function SaveConfig()
-    if not pcall(function() return writefile end) or not writefile then 
-        warn("[DIX: Config] Executor не поддерживает writefile.")
-        return 
-    end
-    local data = GetConfigData()
-    local json = HttpService:JSONEncode(data)
-    writefile(ConfigFileName, json)
-end
-
-local function LoadConfig()
-    if not pcall(function() return readfile end) or not readfile then
-        warn("[DIX: Config] Executor не поддерживает readfile.")
-        return
-    end
-    local success, json = pcall(readfile, ConfigFileName)
-    if not success or not json or json == "" then
-        return
-    end
-    
-    local success, config = pcall(HttpService.JSONDecode, HttpService, json)
-    if success and type(config) == "table" then
-        ApplyConfig(config)
-    else
-        warn("[DIX: Config] Ошибка декодирования конфига.")
-    end
-end
-
-
--- ====================================================================
 -- GUI
 -- ====================================================================
 local Window = WindUi:CreateWindow({
-    Title = "DIX V75.0 (GUI FIX)", 
+    Title = "DIX V76.0 (NO CONFIGS)", 
     Icon = "shield",
     Author = "By DIX",
     Size = UDim2.fromOffset(450, 400),
@@ -532,32 +447,6 @@ GUI_Elements.ESPToggle = EspSection:Toggle({
 local ThemesSection = Tabs.Settings:Section({ Title = "Тема GUI", Opened = true })
 ThemesSection:ThemeChanger({ Title = "Тема", Desc = "Выбрать тему." })
 
-local ConfigSection = Tabs.Settings:Section({ Title = "Конфиг", Opened = true })
-
-GUI_Elements.ConfigTestToggle = ConfigSection:Toggle({
-    Title = "Тест Тоггл",
-    Desc = "Сохраняется/загружается.",
-    Default = _G.configTestToggle,
-    Callback = function(value)
-        _G.configTestToggle = value
-    end
-})
-
-ConfigSection:Button({
-    Title = "Сохранить Конфиг",
-    Desc = "В " .. ConfigFileName,
-    Callback = function()
-        SaveConfig()
-    end
-})
-
-ConfigSection:Button({
-    Title = "Загрузить Конфиг",
-    Desc = "Из " .. ConfigFileName,
-    Callback = function()
-        LoadConfig()
-    end
-})
 
 -- АВТО-ЗАПУСК
 if _G.fovCircleEnabled then StartFOVCircle() end
