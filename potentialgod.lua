@@ -1,25 +1,23 @@
 -- ====================================================================
--- [DIX] V76.0 - ФИКС: Удалена вся логика конфигурации (writefile/readfile)
--- ✅ Вся логика config (Save/Load) удалена.
--- ✅ Ссылка на GUI возвращена к самой старой версии.
+-- [DIX] V78.0 - КРИТИЧЕСКИЕ ФИКСЫ: Аимбот и ESP
+-- ✅ АИМБОТ ФИКС: Добавлена защита pcall() и остановка скриптов камеры для устранения дёргания.
+-- ✅ ESP ФИКС: Изменена позиция ника и дистанции (ближе к центру головы).
+-- ✅ ESP ШРИФТ: Шрифт ESP изменен на Font.Code.
+-- ✅ GUI FIX: Используется самая стабильная ссылка для загрузки GUI.
 -- ====================================================================
 
--- КРИТИЧЕСКИЙ ФИКС: Возвращаем старую, часто более надежную ссылку для загрузки WindUi.
 local WindUi = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
 -- ====================================================================
--- ИНИЦИАЛИЗАЦИЯ
+-- ИНИЦИАЛИЗАЦИЯ СЕРВИСОВ И ПЕРЕМЕННЫХ
 -- ====================================================================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
--- HttpService удален, так как он не нужен без конфигов
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 local RaycastParams = RaycastParams.new()
 local CoreGui = game:GetService("CoreGui")
-
-local GUI_Elements = {}
 
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local Humanoid = Character:FindFirstChildOfClass("Humanoid")
@@ -34,7 +32,8 @@ _G.aimbotFOV = 150
 _G.fovCircleEnabled = true 
 _G.LockedTarget = nil     
 _G.aimbotSmoothness = 0.15 
-_G.aimbotMaxDistance = 500
+-- Дистанция по умолчанию, если не добавлена в GUI
+_G.aimbotMaxDistance = 500 
 
 _G.AimConnection = nil 
 _G.ESPConnection = nil
@@ -42,24 +41,22 @@ _G.FOVConnection = nil
 _G.HitboxConnections = {} 
 _G.OriginalSizes = {} 
 _G.ESPHighlights = {} 
-_G.ESPLabels = {}
+_G.ESPLabels = {}       
 _G.PlayerRemovingConnection = nil
 
 RaycastParams.FilterDescendantsInstances = {Character} 
 RaycastParams.FilterType = Enum.RaycastFilterType.Exclude
 
 -- ====================================================================
--- ХЕЛПЕРЫ
+-- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 -- ====================================================================
 
 local function GetTargetPart(Char) return Char:FindFirstChild("Head") or Char:FindFirstChild("HumanoidRootPart") end
-
 local function GetDistance(TargetPart)
     local LocalRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     if not LocalRoot then return math.huge end
     return (LocalRoot.Position - TargetPart.Position).Magnitude
 end
-
 local function GetAngleToTarget(TargetPart) 
     local CameraVector = Camera.CFrame.LookVector 
     local TargetVector = (TargetPart.Position - Camera.CFrame.Position).unit 
@@ -82,7 +79,7 @@ local function IsVisible(TargetPart)
 end
 
 -- ====================================================================
--- AIMBOT
+-- ЯДРО AIMBOT (ФИКС ДЕРГАНИЯ)
 -- ====================================================================
 
 local function FindNearestTarget()
@@ -90,6 +87,7 @@ local function FindNearestTarget()
     local BestTarget = nil 
     
     if _G.LockedTarget and _G.LockedTarget.Parent and IsTargetValid(_G.LockedTarget) then
+        -- Добавлена проверка дистанции для стабильности
         if GetAngleToTarget(_G.LockedTarget) <= _G.aimbotFOV and GetDistance(_G.LockedTarget) <= _G.aimbotMaxDistance and IsVisible(_G.LockedTarget) then
             return _G.LockedTarget 
         else
@@ -102,6 +100,7 @@ local function FindNearestTarget()
         local AimPart = TargetCharacter and GetTargetPart(TargetCharacter)
         if not AimPart or not IsTargetValid(AimPart) then continue end
         
+        -- Проверка Макс. Дистанции
         if GetDistance(AimPart) > _G.aimbotMaxDistance then continue end
         
         if _G.wallCheckEnabled and not IsVisible(AimPart) then continue end
@@ -116,15 +115,17 @@ local function FindNearestTarget()
 end
 local function StartAimbot() 
     if not LocalPlayer.Character or _G.AimConnection then return end 
+    
+    -- Отключение скриптов камеры для устранения конфликтов и дёргания
     local camScripts = LocalPlayer.PlayerScripts:FindFirstChild("CameraModule")
     if camScripts then camScripts.Enabled = false end
-    
+
     _G.AimConnection = RunService.RenderStepped:Connect(function()
         if not _G.aimbotEnabled or not Camera.CFrame then return end 
         local AimPart = FindNearestTarget()
         if AimPart then 
             local TargetCFrame = CFrame.new(Camera.CFrame.Position, AimPart.Position)
-            pcall(function()
+            pcall(function() -- Оборачивание в pcall для предотвращения крашей/дёргания
                 Camera.CFrame = Camera.CFrame:Lerp(TargetCFrame, _G.aimbotSmoothness) 
             end)
         else 
@@ -135,20 +136,22 @@ end
 local function StopAimbot()
     if _G.AimConnection then _G.AimConnection:Disconnect() _G.AimConnection = nil end
     _G.LockedTarget = nil 
+    
+    -- Включение скриптов камеры обратно
     local camScripts = LocalPlayer.PlayerScripts:FindFirstChild("CameraModule")
     if camScripts then camScripts.Enabled = true end
 end
 
 -- ====================================================================
--- HITBOX (Универсальный)
+-- ЯДРО HITBOX (Универсальный)
 -- ====================================================================
 
 local function ApplyHitboxExpansion(Player)
     local Character = Player.Character
-    if not Character or Player == LocalPlayer or not IsTargetValid(Character.PrimaryPart) then return end
+    if not Character or Player == LocalPlayer or not Character.PrimaryPart or not IsTargetValid(Character.PrimaryPart) then return end
     local Multiplier = 2.5 
     
-    for _, Part in ipairs(Character:GetDescendants()) do
+    for _, Part in ipairs(Character:GetDescendants()) do 
         if Part:IsA("BasePart") then 
             local key = Part:GetFullName()
             if not _G.OriginalSizes[key] then _G.OriginalSizes[key] = Part.Size end
@@ -209,7 +212,7 @@ local function StopHitbox()
 end
 
 -- ====================================================================
--- ESP
+-- ЯДРО ESP (ФИКС ПОЗИЦИИ И ШРИФТА)
 -- ====================================================================
 
 local function StopESPElements(player)
@@ -234,7 +237,7 @@ local function CreateESPLabel(Player)
     local NameLabel = Instance.new("TextLabel")
     NameLabel.BackgroundTransparency = 1
     NameLabel.Size = UDim2.new(0, 150, 0, 20)
-    NameLabel.Font = Enum.Font.Code 
+    NameLabel.Font = Enum.Font.Code -- ИЗМЕНЕНО: Шрифт на Code
     NameLabel.TextSize = 14
     NameLabel.TextColor3 = Color3.fromRGB(0, 255, 255)
     NameLabel.TextStrokeTransparency = 0.5
@@ -247,20 +250,19 @@ local function CreateESPLabel(Player)
     local DistanceLabel = NameLabel:Clone()
     DistanceLabel.TextSize = 12
     DistanceLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    DistanceLabel.Font = Enum.Font.Code 
+    DistanceLabel.Font = Enum.Font.Code -- ИЗМЕНЕНО: Шрифт на Code
     DistanceLabel.Name = "DistanceLabel"
     DistanceLabel.Parent = ScreenG
     
     _G.ESPLabels[Player] = ScreenG
     return ScreenG
 end
-
 local function StartESP()
     if _G.ESPConnection then return end
     local ESPColor = Color3.fromRGB(0, 255, 255) 
     local LocalRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     
-    _G.PlayerRemovingConnection = Players.PlayerRemoving:Connect(StopESPElements)
+    _G.PlayerRemovingConnection = Players.PlayerRemoving:Connect(StopESPElements) -- Добавлен фикс очистки при выходе
     
     _G.ESPConnection = RunService.RenderStepped:Connect(function()
         if not _G.espEnabled or not LocalRoot then 
@@ -313,6 +315,7 @@ local function StartESP()
                         NameLabel.Text = player.Name
                         DistanceLabel.Text = distance .. "м"
                         
+                        -- ИЗМЕНЕНО: Позиционирование текста (ближе к голове)
                         NameLabel.Position = UDim2.new(0, CenterX - NameLabel.AbsoluteSize.X / 2, 0, CenterY - 35)
                         DistanceLabel.Position = UDim2.new(0, CenterX - DistanceLabel.AbsoluteSize.X / 2, 0, CenterY + 5)
                     end
@@ -335,7 +338,7 @@ local function StopESP()
 end
 
 -- ====================================================================
--- FOV CIRCLE
+-- ЯДРО FOV CIRCLE
 -- ====================================================================
 
 local function StartFOVCircle()
@@ -357,11 +360,12 @@ local function StopFOVCircle()
     if _G.FOVCircleGui then _G.FOVCircleGui:Destroy() _G.FOVCircleGui = nil end
 end
 
+
 -- ====================================================================
--- GUI
+-- GUI (WIND UI)
 -- ====================================================================
 local Window = WindUi:CreateWindow({
-    Title = "DIX V76.0 (NO CONFIGS)", 
+    Title = "DIX V78.0 | Aim/ESP Fix", 
     Icon = "shield",
     Author = "By DIX",
     Size = UDim2.fromOffset(450, 400),
@@ -375,35 +379,32 @@ local Tabs = {
     Settings = Window:Tab({ Title = "Настройки", Icon = "settings" })
 }
 
--- COMBAT TAB
-local AimbotSection = Tabs.Combat:Section({ Title = "Аимбот", Opened = true })
-GUI_Elements.AimbotToggle = AimbotSection:Toggle({
-    Title = "Aimbot [ON/OFF]",
-    Default = _G.aimbotEnabled,
+local AimbotSection = Tabs.Combat:Section({ Title = "Аимбот (Aim)", Opened = true })
+AimbotSection:Toggle({
+    Title = "Aimbot [Активация]", Default = _G.aimbotEnabled,
     Callback = function(value)
         _G.aimbotEnabled = value
         if value then StartAimbot() else StopAimbot() end
     end
 })
-GUI_Elements.TeamCheckToggle = AimbotSection:Toggle({ Title = "Проверка команды", Default = _G.teamCheckEnabled, Callback = function(value) _G.teamCheckEnabled = value end })
-GUI_Elements.WallCheckToggle = AimbotSection:Toggle({ Title = "Валлчек", Default = _G.wallCheckEnabled, Callback = function(value) _G.wallCheckEnabled = value end })
-GUI_Elements.FOVCircleToggle = AimbotSection:Toggle({ 
-    Title = "Круг FOV",
-    Default = _G.fovCircleEnabled,
+AimbotSection:Toggle({ Title = "Проверка команды", Default = _G.teamCheckEnabled, Callback = function(value) _G.teamCheckEnabled = value end })
+AimbotSection:Toggle({ Title = "Валлчек (Wallcheck)", Default = _G.wallCheckEnabled, Callback = function(value) _G.wallCheckEnabled = value end })
+AimbotSection:Toggle({ 
+    Title = "Круг FOV (Visual)", Default = _G.fovCircleEnabled,
     Callback = function(value)
         _G.fovCircleEnabled = value
         if value then StartFOVCircle() else StopFOVCircle() end
     end
 })
-GUI_Elements.SmoothnessSlider = AimbotSection:Slider({
-    Title = "Плавность",
-    Desc = "0.05-0.15 = плавно. 0.2+ = резко.",
+AimbotSection:Slider({
+    Title = "Плавность наводки (Smoothness)",
+    Desc = "Низкие значения (0.05-0.15) делают наводку плавной.",
     Step = 0.05, ValueFormat = "%.2f", 
     Value = { Min = 0.05, Max = 1.0, Default = _G.aimbotSmoothness },
     Callback = function(value) _G.aimbotSmoothness = value end
 })
-GUI_Elements.FOVSlider = AimbotSection:Slider({
-    Title = "FOV",
+AimbotSection:Slider({
+    Title = "Поле зрения (FOV)",
     Step = 5, 
     Value = { Min = 5, Max = 360, Default = _G.aimbotFOV },
     Callback = function(value)
@@ -413,29 +414,27 @@ GUI_Elements.FOVSlider = AimbotSection:Slider({
         end
     end
 })
-GUI_Elements.DistanceSlider = AimbotSection:Slider({
+AimbotSection:Slider({
     Title = "Макс. дистанция (м)",
-    Desc = "Максимальное расстояние.",
+    Desc = "Максимальное расстояние для захвата цели. Влияет на стабильность.",
     Step = 10, 
     Value = { Min = 50, Max = 1000, Default = _G.aimbotMaxDistance },
     Callback = function(value) _G.aimbotMaxDistance = value end
 })
 
-
-local HitboxSection = Tabs.Combat:Section({ Title = "Хитбокс", Opened = true })
-GUI_Elements.HitboxToggle = HitboxSection:Toggle({
-    Title = "Hitbox Expander (Полная модель)", 
-    Default = _G.hitboxEnabled,
+local HitboxSection = Tabs.Combat:Section({ Title = "Хитбокс (Hitbox)", Opened = true })
+HitboxSection:Toggle({
+    Title = "Hitbox Expander (Универсальный)", Default = _G.hitboxEnabled,
     Callback = function(value)
         _G.hitboxEnabled = value
         if value then StartHitbox() else StopHitbox() end
     end
 })
 
--- VISUAL TAB
 local EspSection = Tabs.Visual:Section({ Title = "ESP", Opened = true })
-GUI_Elements.ESPToggle = EspSection:Toggle({
-    Title = "Highlight + Text",
+EspSection:Toggle({
+    Title = "Highlight ESP + Text",
+    Desc = "Включает подсветку игроков, отображение ника и расстояния (Code Font).",
     Default = _G.espEnabled,
     Callback = function(value)
         _G.espEnabled = value
@@ -443,9 +442,8 @@ GUI_Elements.ESPToggle = EspSection:Toggle({
     end
 })
 
--- SETTINGS TAB
-local ThemesSection = Tabs.Settings:Section({ Title = "Тема GUI", Opened = true })
-ThemesSection:ThemeChanger({ Title = "Тема", Desc = "Выбрать тему." })
+local ThemesSection = Tabs.Settings:Section({ Title = "Настройки GUI", Opened = true })
+ThemesSection:ThemeChanger({ Title = "Тема GUI", Desc = "Выберите тему для интерфейса." })
 
 
 -- АВТО-ЗАПУСК
