@@ -1,178 +1,174 @@
 -- ====================================================================
--- [DIX] V50.0 - ФИНАЛЬНАЯ ВЕРСИЯ CORE СТРУКТУРЫ НА WINDUI
--- ✅ Использует рабочий загрузчик WindUI из вашего скрипта.
--- ✅ Сохранен рабочий метод инициализации.
--- ✅ Добавлена чистая структура для Aimbot, Hitbox, ESP и Noclip.
+-- 2. ФУНКЦИИ ЯДРА (ПОЛНЫЙ РАБОЧИЙ КОД ИЗ V48.0)
 -- ====================================================================
 
--- 1. ЗАГРУЗКА WINDUI (РАБОЧАЯ СТРОКА)
-local WindUi = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+-- [[ Helper Functions ]]
+local function GetTargetPart(Character) return Character:FindFirstChild("Head") or Character:FindFirstChild("HumanoidRootPart") end
 
--- 2. СЕРВИСЫ И ПЕРЕМЕННЫЕ
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
-local LocalPlayer = Players.LocalPlayer
-local Humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+local function IsTargetValid(TargetPart)
+    local Player = Players:GetPlayerFromCharacter(TargetPart.Parent)
+    if not Player or Player == LocalPlayer then return false end
+    -- Используем _G.teamCheckEnabled, так как он привязан к GUI
+    if _G.teamCheckEnabled and LocalPlayer.Team and Player.Team and LocalPlayer.Team == Player.Team then return false end
+    return true
+end
 
--- Глобальные переменные для управления состоянием чита
-_G.aimbotEnabled = false
-_G.hitboxEnabled = false
-_G.espEnabled = false
-_G.noclipEnabled = false
-_G.teamCheckEnabled = true 
-_G.aimbotFOV = 200
+local function FindNearestTarget()
+    local TargetRootPart = nil
+    local SmallestFOV = math.huge
 
--- Контейнеры для подключений (ВАЖНО для остановки циклов)
-_G.AimConnection = nil 
-_G.ESPConnection = nil
-_G.HitboxConnections = {} 
-_G.OriginalSizes = {} 
+    for _, Player in ipairs(Players:GetPlayers()) do
+        local TargetCharacter = Player.Character
+        local RootPart = TargetCharacter and TargetCharacter:FindFirstChild("HumanoidRootPart") 
+        local AimPart = TargetCharacter and GetTargetPart(TargetCharacter)
+        
+        if not RootPart or not AimPart or not IsTargetValid(RootPart) then continue end
 
--- ====================================================================
--- 3. ФУНКЦИИ ЯДРА (СЮДА ВСТАВЬТЕ ВАШ РАБОЧИЙ КОД)
--- ====================================================================
+        -- Проверка FOV (используем _G.aimbotFOV из GUI)
+        local CameraVector = Camera.CFrame.LookVector
+        local TargetVector = (AimPart.Position - Camera.CFrame.Position).unit 
+        local Angle = math.deg(math.acos(CameraVector:Dot(TargetVector)))
+        if Angle < SmallestFOV and Angle <= _G.aimbotFOV then 
+            SmallestFOV = Angle
+            TargetRootPart = RootPart
+        end
+    end
+    return TargetRootPart
+end
 
 -- [[ Aimbot Functions ]]
 local function StartAimbot() 
-    print("[DIX: Aimbot] Аимбот ВКЛ. ВСТАВЬТЕ РАБОЧИЙ КОД ИЗ V48.0 СЮДА.")
-    -- ПРИМЕР: _G.AimConnection = RunService.RenderStepped:Connect(function() ... end)
+    if _G.AimConnection then return end 
+    _G.AimConnection = RunService.RenderStepped:Connect(function()
+        if not _G.aimbotEnabled then return end
+        
+        local TargetRootPart = FindNearestTarget()
+        if TargetRootPart then 
+            local AimPart = GetTargetPart(TargetRootPart.Parent)
+            if AimPart then
+                local TargetCFrame = CFrame.new(Camera.CFrame.Position, AimPart.Position)
+                -- Скорость 0.2 как стандарт
+                Camera.CFrame = Camera.CFrame:Lerp(TargetCFrame, 0.2) 
+            end
+        end
+    end)
+    print("[DIX: Aimbot] Аимбот ВКЛ.")
 end
 local function StopAimbot()
+    if _G.AimConnection then _G.AimConnection:Disconnect() _G.AimConnection = nil end
     print("[DIX: Aimbot] Аимбот ВЫКЛ.")
-    -- ПРИМЕР: if _G.AimConnection then _G.AimConnection:Disconnect() _G.AimConnection = nil end
 end
 
 -- [[ Hitbox Functions ]]
+local function ApplyHitboxExpansion(Player)
+    local Character = Player.Character
+    if not Character or Player == LocalPlayer then return end
+    if _G.teamCheckEnabled and LocalPlayer.Team and Player.Team and LocalPlayer.Team == Player.Team then return end
+    
+    local Hitbox_Parts_To_Change = {"HumanoidRootPart", "Head"} 
+    local Hitbox_Multiplier = 2.0 
+
+    for _, PartName in ipairs(Hitbox_Parts_To_Change) do
+        local Part = Character:FindFirstChild(PartName, true)
+        if Part and Part:IsA("BasePart") then 
+            local key = Part:GetFullName()
+            if not _G.OriginalSizes[key] then _G.OriginalSizes[key] = Part.Size end
+            Part.Size = _G.OriginalSizes[key] * Hitbox_Multiplier
+        end
+    end
+end
+local function RevertHitboxExpansion(Player)
+    local Character = Player.Character
+    if not Character then return end
+    local Hitbox_Parts_To_Change = {"HumanoidRootPart", "Head"}
+    for _, PartName in ipairs(Hitbox_Parts_To_Change) do
+        local Part = Character:FindFirstChild(PartName, true)
+        local key = Part and Part:GetFullName()
+        if Part and _G.OriginalSizes[key] then
+            Part.Size = _G.OriginalSizes[key]
+            _G.OriginalSizes[key] = nil 
+        end
+    end
+end
+
 local function StartHitbox()
-    print("[DIX: Hitbox] Экспандер ВКЛ. ВСТАВЬТЕ РАБОЧИЙ КОД СЮДА.")
-    -- ПРИМЕР: Логика изменения размера Hitbox (HumanoidRootPart, Head)
+    if _G.HitboxConnections.Heartbeat then return end 
+    _G.HitboxConnections.Heartbeat = RunService.Heartbeat:Connect(function()
+        if not _G.hitboxEnabled then return end
+        for _, Player in ipairs(Players:GetPlayers()) do ApplyHitboxExpansion(Player) end
+    end)
+    Players.PlayerAdded:Connect(ApplyHitboxExpansion)
+    Players.PlayerRemoving:Connect(RevertHitboxExpansion)
+    print("[DIX: Hitbox] Экспандер ВКЛ.")
 end
 local function StopHitbox()
+    if _G.HitboxConnections.Heartbeat then _G.HitboxConnections.Heartbeat:Disconnect() _G.HitboxConnections.Heartbeat = nil end
+    for _, Player in ipairs(Players:GetPlayers()) do RevertHitboxExpansion(Player) end
     print("[DIX: Hitbox] Экспандер ВЫКЛ.")
-    -- ПРИМЕР: Логика возврата оригинального размера
 end
 
 -- [[ ESP Functions ]]
 local function StartESP()
-    print("[DIX: ESP] ESP ВКЛ. ВСТАВЬТЕ РАБОЧИЙ КОД СЮДА.")
-    -- ПРИМЕР: _G.ESPConnection = RunService.Heartbeat:Connect(function() ... end)
+    if _G.ESPConnection then return end
+    -- Color3.fromRGB(0, 255, 255) - стандартный цвет
+    local ESPColor = Color3.fromRGB(0, 255, 255) 
+    
+    _G.ESPConnection = RunService.Heartbeat:Connect(function()
+        if not _G.espEnabled then 
+            for player, highlight in pairs(_G.ESPHighlights) do if highlight.Enabled then highlight.Enabled = false end end
+            return 
+        end
+        
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character and IsTargetValid(player.Character.PrimaryPart) then
+                local character = player.Character
+                
+                if not _G.ESPHighlights[player] then
+                    local highlight = Instance.new("Highlight")
+                    highlight.OutlineTransparency = 0
+                    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    highlight.Parent = character
+                    _G.ESPHighlights[player] = highlight
+                end
+                
+                _G.ESPHighlights[player].FillColor = ESPColor
+                _G.ESPHighlights[player].OutlineColor = ESPColor
+                _G.ESPHighlights[player].Enabled = true
+            elseif _G.ESPHighlights[player] then
+                _G.ESPHighlights[player].Enabled = false
+            end
+        end
+    end)
+    print("[DIX: ESP] ESP ВКЛ.")
 end
 local function StopESP()
+    if _G.ESPConnection then 
+        _G.ESPConnection:Disconnect() 
+        _G.ESPConnection = nil 
+    end
+    for _, highlight in pairs(_G.ESPHighlights) do
+        highlight:Destroy()
+    end
+    table.clear(_G.ESPHighlights)
     print("[DIX: ESP] ESP ВЫКЛ.")
-    -- ПРИМЕР: Логика удаления всех Highlight/Box ESP
 end
 
 -- [[ Noclip Functions ]]
 local function EnableNoclip()
-    print("[DIX: Noclip] Noclip ВКЛ. ВСТАВЬТЕ РАБОЧИЙ КОД СЮДА.")
-    -- ПРИМЕР: LocalPlayer.Character.Humanoid.PlatformStand = true; Игнорирование коллизий.
+    if not LocalPlayer.Character then return end
+    LocalPlayer.Character.Humanoid.PlatformStand = true
+    ContextActionService:BindAction("DIX_Noclip", function(_, inputState)
+        if inputState == Enum.UserInputState.Begin then
+            -- Добавьте логику для игнорирования коллизий (самый безопасный способ)
+        end
+        return Enum.ContextActionResult.Pass
+    end, false, Enum.KeyCode.W, Enum.KeyCode.A, Enum.KeyCode.S, Enum.KeyCode.D)
+    print("[DIX: Noclip] Noclip ВКЛ.")
 end
 local function DisableNoclip()
+    if LocalPlayer.Character and LocalPlayer.Character.Humanoid then
+        LocalPlayer.Character.Humanoid.PlatformStand = false
+        ContextActionService:UnbindAction("DIX_Noclip")
+    end
     print("[DIX: Noclip] Noclip ВЫКЛ.")
-    -- ПРИМЕР: LocalPlayer.Character.Humanoid.PlatformStand = false; Восстановление коллизий.
 end
-
-
--- ====================================================================
--- 4. СОЗДАНИЕ ОКНА GUI (УПРОЩЕНО)
--- ====================================================================
-
-local Window = WindUi:CreateWindow({
-    Title = "DIX V50.0 | WindUI Core", 
-    Icon = "shield",
-    Author = "By DIX",
-    Size = UDim2.fromOffset(450, 400),
-    Theme = "Dark", 
-    HideSearchBar = true,
-})
-
--- ====================================================================
--- 5. ВКЛАДКИ И ЭЛЕМЕНТЫ УПРАВЛЕНИЯ
--- ====================================================================
-
-local Tabs = {
-    Combat = Window:Tab({ Title = "Бой", Icon = "sword" }),
-    Visual = Window:Tab({ Title = "Визуал", Icon = "palette" }),
-    Movement = Window:Tab({ Title = "Движение", Icon = "zap" }),
-    Settings = Window:Tab({ Title = "Настройки", Icon = "settings" })
-}
-
--- COMBAT: Aimbot
-local AimbotSection = Tabs.Combat:Section({ Title = "Аимбот (Aim)", Opened = true })
-
-AimbotSection:Toggle({
-    Title = "Aimbot [Активация]",
-    Default = _G.aimbotEnabled,
-    Callback = function(value)
-        _G.aimbotEnabled = value
-        if value then StartAimbot() else StopAimbot() end
-    end
-})
-AimbotSection:Toggle({
-    Title = "Проверка команды",
-    Desc = "Игнорировать игроков из своей команды.",
-    Default = _G.teamCheckEnabled,
-    Callback = function(value)
-        _G.teamCheckEnabled = value
-    end
-})
-AimbotSection:Slider({
-    Title = "Поле зрения (FOV)",
-    Default = _G.aimbotFOV,
-    Min = 50, Max = 800, Step = 10,
-    Callback = function(value)
-        _G.aimbotFOV = value
-    end
-})
-
--- COMBAT: Hitbox
-local HitboxSection = Tabs.Combat:Section({ Title = "Хитбокс (Hitbox)", Opened = true })
-
-HitboxSection:Toggle({
-    Title = "Hitbox Expander",
-    Default = _G.hitboxEnabled,
-    Callback = function(value)
-        _G.hitboxEnabled = value
-        if value then StartHitbox() else StopHitbox() end
-    end
-})
-
--- VISUAL: ESP
-local EspSection = Tabs.Visual:Section({ Title = "ESP", Opened = true })
-
-EspSection:Toggle({
-    Title = "Highlight ESP",
-    Default = _G.espEnabled,
-    Callback = function(value)
-        _G.espEnabled = value
-        if value then StartESP() else StopESP() end
-    end
-})
-
--- MOVEMENT
-local MovementPlayerSection = Tabs.Movement:Section({ Title = "Движение", Opened = true })
-
-MovementPlayerSection:Toggle({
-    Title = "Noclip",
-    Default = _G.noclipEnabled,
-    Callback = function(value)
-        _G.noclipEnabled = value
-        if value then EnableNoclip() else DisableNoclip() end
-    end
-})
-MovementPlayerSection:Slider({
-    Title = "Скорость бега",
-    Default = 16, Min = 16, Max = 100, Step = 1,
-    Callback = function(value)
-        if LocalPlayer.Character and Humanoid then
-            Humanoid.WalkSpeed = value
-        end
-    end
-})
-
--- SETTINGS TAB
-local ThemesSection = Tabs.Settings:Section({ Title = "Настройки GUI", Opened = true })
-ThemesSection:ThemeChanger({ Title = "Тема GUI", Desc = "Выберите тему для интерфейса." })
-
-print("[DIX SUCCESS] V50.0 - WindUI Hub готов к использованию.")
