@@ -1,117 +1,108 @@
 -- ====================================================================
--- [DIX] V49.0 - ЧИСТЫЙ CORE СМЕЙТ (на основе WindUI)
--- ✅ Сохранена рабочая загрузка WindUI (из гуи.txt)
--- ✅ Добавлена чистая структура для Aimbot, Hitbox, ESP и Noclip
--- ❌ Удалены все Halloween/PrismaticaX зависимости для стабильности
+-- [DIX] V50.0 - ФИНАЛЬНАЯ ВЕРСИЯ CORE СТРУКТУРЫ НА WINDUI
+-- ✅ Использует рабочий загрузчик WindUI из вашего скрипта.
+-- ✅ Сохранен рабочий метод инициализации.
+-- ✅ Добавлена чистая структура для Aimbot, Hitbox, ESP и Noclip.
 -- ====================================================================
 
--- Load WindUi Library (Единственная рабочая строка загрузки GUI, как в вашем файле)
+-- 1. ЗАГРУЗКА WINDUI (РАБОЧАЯ СТРОКА)
 local WindUi = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
--- Services
+-- 2. СЕРВИСЫ И ПЕРЕМЕННЫЕ
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
 local Humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
 
--- ====================================================================
--- 1. ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ (Состояние функций)
--- ====================================================================
-
+-- Глобальные переменные для управления состоянием чита
 _G.aimbotEnabled = false
-_G.aimbotFOV = 200
 _G.hitboxEnabled = false
 _G.espEnabled = false
-_G.teamCheckEnabled = true
 _G.noclipEnabled = false
-_G.speedConnection = nil -- Для управления скоростью/прыжком
-_G.aimConnection = nil   -- Для управления циклом Aimbot
+_G.teamCheckEnabled = true 
+_G.aimbotFOV = 200
+
+-- Контейнеры для подключений (ВАЖНО для остановки циклов)
+_G.AimConnection = nil 
+_G.ESPConnection = nil
+_G.HitboxConnections = {} 
+_G.OriginalSizes = {} 
 
 -- ====================================================================
--- 2. ФУНКЦИИ ЯДРА (Сюда вы добавите реальный рабочий код)
+-- 3. ФУНКЦИИ ЯДРА (СЮДА ВСТАВЬТЕ ВАШ РАБОЧИЙ КОД)
 -- ====================================================================
 
--- COMBAT
+-- [[ Aimbot Functions ]]
 local function StartAimbot() 
-    print("[DIX: Aimbot] Аимбот ВКЛ. (ДОБАВЬТЕ ЛОГИКУ СЮДА)")
-    -- Пример: _G.aimConnection = RunService.RenderStepped:Connect(function() ... end)
+    print("[DIX: Aimbot] Аимбот ВКЛ. ВСТАВЬТЕ РАБОЧИЙ КОД ИЗ V48.0 СЮДА.")
+    -- ПРИМЕР: _G.AimConnection = RunService.RenderStepped:Connect(function() ... end)
 end
 local function StopAimbot()
     print("[DIX: Aimbot] Аимбот ВЫКЛ.")
-    -- Пример: if _G.aimConnection then _G.aimConnection:Disconnect() _G.aimConnection = nil end
+    -- ПРИМЕР: if _G.AimConnection then _G.AimConnection:Disconnect() _G.AimConnection = nil end
 end
 
+-- [[ Hitbox Functions ]]
 local function StartHitbox()
-    print("[DIX: Hitbox] Экспандер ВКЛ. (ДОБАВЬТЕ ЛОГИКУ СЮДА)")
-    -- Логика: изменение размера Hitbox
+    print("[DIX: Hitbox] Экспандер ВКЛ. ВСТАВЬТЕ РАБОЧИЙ КОД СЮДА.")
+    -- ПРИМЕР: Логика изменения размера Hitbox (HumanoidRootPart, Head)
 end
 local function StopHitbox()
     print("[DIX: Hitbox] Экспандер ВЫКЛ.")
-    -- Логика: возврат оригинального размера Hitbox
+    -- ПРИМЕР: Логика возврата оригинального размера
 end
 
--- VISUAL
+-- [[ ESP Functions ]]
 local function StartESP()
-    print("[DIX: ESP] ESP ВКЛ. (ДОБАВЬТЕ ЛОГИКУ СЮДА)")
-    -- Логика: цикл для создания Highlight, Box, Name ESP
+    print("[DIX: ESP] ESP ВКЛ. ВСТАВЬТЕ РАБОЧИЙ КОД СЮДА.")
+    -- ПРИМЕР: _G.ESPConnection = RunService.Heartbeat:Connect(function() ... end)
 end
 local function StopESP()
     print("[DIX: ESP] ESP ВЫКЛ.")
-    -- Логика: удаление всех созданных элементов ESP
+    -- ПРИМЕР: Логика удаления всех Highlight/Box ESP
 end
 
--- MOVEMENT
+-- [[ Noclip Functions ]]
 local function EnableNoclip()
-    print("[DIX: Noclip] Noclip ВКЛ. (ДОБАВЬТЕ ЛОГИКУ СЮДА)")
-    -- Логика: Humanoid.PlatformStand = true; noclipConnection = LocalPlayer.Character.ChildAdded:Connect(...)
+    print("[DIX: Noclip] Noclip ВКЛ. ВСТАВЬТЕ РАБОЧИЙ КОД СЮДА.")
+    -- ПРИМЕР: LocalPlayer.Character.Humanoid.PlatformStand = true; Игнорирование коллизий.
 end
 local function DisableNoclip()
     print("[DIX: Noclip] Noclip ВЫКЛ.")
-    -- Логика: Humanoid.PlatformStand = false; noclipConnection:Disconnect()
+    -- ПРИМЕР: LocalPlayer.Character.Humanoid.PlatformStand = false; Восстановление коллизий.
 end
 
+
 -- ====================================================================
--- 3. ОСНОВНОЕ ОКНО GUI (WindUI)
+-- 4. СОЗДАНИЕ ОКНА GUI (УПРОЩЕНО)
 -- ====================================================================
 
 local Window = WindUi:CreateWindow({
-    Title = "DIX Core Hub", -- Изменено название
+    Title = "DIX V50.0 | WindUI Core", 
     Icon = "shield",
     Author = "By DIX",
     Size = UDim2.fromOffset(450, 400),
     Theme = "Dark", 
-    Acrylic = false,
     HideSearchBar = true,
-    SideBarWidth = 150,
-    User = { Enabled = true, Anonymous = false }
 })
 
 -- ====================================================================
--- 4. ВКЛАДКИ И СЕКЦИИ (Упрощенная структура)
+-- 5. ВКЛАДКИ И ЭЛЕМЕНТЫ УПРАВЛЕНИЯ
 -- ====================================================================
 
 local Tabs = {
-    Main = Window:Tab({ Title = "Основное", Icon = "toggle-right" }),
     Combat = Window:Tab({ Title = "Бой", Icon = "sword" }),
     Visual = Window:Tab({ Title = "Визуал", Icon = "palette" }),
     Movement = Window:Tab({ Title = "Движение", Icon = "zap" }),
     Settings = Window:Tab({ Title = "Настройки", Icon = "settings" })
 }
 
-local AimbotSection = Tabs.Combat:Section({ Title = "Аимбот (Aim)", Opened = true })
-local HitboxSection = Tabs.Combat:Section({ Title = "Хитбокс (Hitbox)", Opened = true })
-local EspSection = Tabs.Visual:Section({ Title = "ESP", Opened = true })
-local MovementPlayerSection = Tabs.Movement:Section({ Title = "Персонаж", Opened = true })
-
--- ====================================================================
--- 5. ЭЛЕМЕНТЫ УПРАВЛЕНИЯ
--- ====================================================================
-
 -- COMBAT: Aimbot
+local AimbotSection = Tabs.Combat:Section({ Title = "Аимбот (Aim)", Opened = true })
+
 AimbotSection:Toggle({
-    Title = "Aimbot",
-    Desc = "Автоматическое наведение на цель.",
+    Title = "Aimbot [Активация]",
     Default = _G.aimbotEnabled,
     Callback = function(value)
         _G.aimbotEnabled = value
@@ -119,7 +110,7 @@ AimbotSection:Toggle({
     end
 })
 AimbotSection:Toggle({
-    Title = "Проверка команды (Team Check)",
+    Title = "Проверка команды",
     Desc = "Игнорировать игроков из своей команды.",
     Default = _G.teamCheckEnabled,
     Callback = function(value)
@@ -128,18 +119,18 @@ AimbotSection:Toggle({
 })
 AimbotSection:Slider({
     Title = "Поле зрения (FOV)",
-    Default = 200,
-    Min = 50,
-    Max = 800,
+    Default = _G.aimbotFOV,
+    Min = 50, Max = 800, Step = 10,
     Callback = function(value)
         _G.aimbotFOV = value
     end
 })
 
 -- COMBAT: Hitbox
+local HitboxSection = Tabs.Combat:Section({ Title = "Хитбокс (Hitbox)", Opened = true })
+
 HitboxSection:Toggle({
     Title = "Hitbox Expander",
-    Desc = "Увеличение хитбокса противников.",
     Default = _G.hitboxEnabled,
     Callback = function(value)
         _G.hitboxEnabled = value
@@ -148,9 +139,10 @@ HitboxSection:Toggle({
 })
 
 -- VISUAL: ESP
+local EspSection = Tabs.Visual:Section({ Title = "ESP", Opened = true })
+
 EspSection:Toggle({
     Title = "Highlight ESP",
-    Desc = "Подсветка игроков.",
     Default = _G.espEnabled,
     Callback = function(value)
         _G.espEnabled = value
@@ -158,10 +150,11 @@ EspSection:Toggle({
     end
 })
 
--- MOVEMENT: Player
+-- MOVEMENT
+local MovementPlayerSection = Tabs.Movement:Section({ Title = "Движение", Opened = true })
+
 MovementPlayerSection:Toggle({
     Title = "Noclip",
-    Desc = "Проход сквозь стены.",
     Default = _G.noclipEnabled,
     Callback = function(value)
         _G.noclipEnabled = value
@@ -169,10 +162,8 @@ MovementPlayerSection:Toggle({
     end
 })
 MovementPlayerSection:Slider({
-    Title = "Скорость бега (WalkSpeed)",
-    Default = 16,
-    Min = 16,
-    Max = 100,
+    Title = "Скорость бега",
+    Default = 16, Min = 16, Max = 100, Step = 1,
     Callback = function(value)
         if LocalPlayer.Character and Humanoid then
             Humanoid.WalkSpeed = value
@@ -181,7 +172,7 @@ MovementPlayerSection:Slider({
 })
 
 -- SETTINGS TAB
-local ThemesSection = Tabs.Settings:Section({ Title = "Кастомизация", Opened = true })
+local ThemesSection = Tabs.Settings:Section({ Title = "Настройки GUI", Opened = true })
 ThemesSection:ThemeChanger({ Title = "Тема GUI", Desc = "Выберите тему для интерфейса." })
 
-print("[DIX SUCCESS] WindUI Core Hub Loaded.")
+print("[DIX SUCCESS] V50.0 - WindUI Hub готов к использованию.")
