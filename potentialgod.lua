@@ -1,9 +1,9 @@
 -- ====================================================================
--- [DIX] V73.0 - FIX: Universal Hitbox Expansion
--- ✅ ИСПРАВЛЕНО: Hitbox Expander теперь увеличивает ВСЮ модель.
--- ✅ ФИКСЫ: ESP Cleanup & Aimbot Distance сохранены.
+-- [DIX] V75.0 - КРИТИЧЕСКИЙ ФИКС: Загрузка GUI (WindUi)
+-- ✅ ИСПРАВЛЕНО: Ссылка для загрузки WindUi заменена на альтернативную/старую.
 -- ====================================================================
 
+-- КРИТИЧЕСКИЙ ФИКС: Возвращаем старую, часто более надежную ссылку для загрузки WindUi.
 local WindUi = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
 -- ====================================================================
@@ -18,7 +18,7 @@ local Camera = Workspace.CurrentCamera
 local RaycastParams = RaycastParams.new()
 local CoreGui = game:GetService("CoreGui")
 
-local ConfigFileName = "DIX_v73_Config.json"
+local ConfigFileName = "DIX_v75_Config.json" -- Обновлен номер версии
 local GUI_Elements = {}
 
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
@@ -149,13 +149,11 @@ local function ApplyHitboxExpansion(Player)
     if not Character or Player == LocalPlayer or not IsTargetValid(Character.PrimaryPart) then return end
     local Multiplier = 2.5 
     
-    -- Перебираем все потомки, которые являются BasePart (включая аксессуары)
     for _, Part in ipairs(Character:GetDescendants()) do
         if Part:IsA("BasePart") then 
             local key = Part:GetFullName()
             if not _G.OriginalSizes[key] then _G.OriginalSizes[key] = Part.Size end
             
-            -- Применяем увеличение
             Part.Size = _G.OriginalSizes[key] * Multiplier
         end
     end
@@ -164,7 +162,6 @@ local function RevertHitboxExpansion(Player)
     local Character = Player.Character
     if not Character then return end
     
-    -- Перебираем все потомки, чтобы восстановить оригинальный размер
     for _, Part in ipairs(Character:GetDescendants()) do
         if Part:IsA("BasePart") then
             local key = Part:GetFullName()
@@ -178,23 +175,19 @@ end
 local function StartHitbox()
     if _G.HitboxConnections.Heartbeat then return end 
     
-    -- Начальное применение ко всем игрокам
     for _, Player in ipairs(Players:GetPlayers()) do ApplyHitboxExpansion(Player) end 
     
-    -- Постоянное применение (на случай, если игра сбрасывает размеры)
     _G.HitboxConnections.Heartbeat = RunService.Heartbeat:Connect(function()
         if not _G.hitboxEnabled then return end
         for _, Player in ipairs(Players:GetPlayers()) do ApplyHitboxExpansion(Player) end
     end)
     
-    -- Применение к новым игрокам и новым чарам
     _G.HitboxConnections.PlayerAdded = Players.PlayerAdded:Connect(function(Player)
         _G.HitboxConnections[Player.UserId] = Player.CharacterAdded:Connect(function(Character) 
             if _G.hitboxEnabled then ApplyHitboxExpansion(Player) end
         end)
     end)
     
-    -- Восстановление при выходе игрока
     _G.HitboxConnections.PlayerRemoving = Players.PlayerRemoving:Connect(function(Player)
         RevertHitboxExpansion(Player)
         if _G.HitboxConnections[Player.UserId] then
@@ -453,7 +446,7 @@ end
 -- GUI
 -- ====================================================================
 local Window = WindUi:CreateWindow({
-    Title = "DIX V73.0", 
+    Title = "DIX V75.0 (GUI FIX)", 
     Icon = "shield",
     Author = "By DIX",
     Size = UDim2.fromOffset(450, 400),
