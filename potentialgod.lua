@@ -1,5 +1,7 @@
 -- ====================================================================
--- [DIX] V71.0 - Минимальная версия
+-- [DIX] V73.0 - FIX: Universal Hitbox Expansion
+-- ✅ ИСПРАВЛЕНО: Hitbox Expander теперь увеличивает ВСЮ модель.
+-- ✅ ФИКСЫ: ESP Cleanup & Aimbot Distance сохранены.
 -- ====================================================================
 
 local WindUi = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
@@ -16,7 +18,7 @@ local Camera = Workspace.CurrentCamera
 local RaycastParams = RaycastParams.new()
 local CoreGui = game:GetService("CoreGui")
 
-local ConfigFileName = "DIX_v70_Config.json"
+local ConfigFileName = "DIX_v73_Config.json"
 local GUI_Elements = {}
 
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
@@ -32,6 +34,7 @@ _G.aimbotFOV = 150
 _G.fovCircleEnabled = true 
 _G.LockedTarget = nil     
 _G.aimbotSmoothness = 0.15 
+_G.aimbotMaxDistance = 500
 _G.configTestToggle = false
 
 _G.AimConnection = nil 
@@ -40,7 +43,8 @@ _G.FOVConnection = nil
 _G.HitboxConnections = {} 
 _G.OriginalSizes = {} 
 _G.ESPHighlights = {} 
-_G.ESPLabels = {}       
+_G.ESPLabels = {}
+_G.PlayerRemovingConnection = nil
 
 RaycastParams.FilterDescendantsInstances = {Character} 
 RaycastParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -50,6 +54,13 @@ RaycastParams.FilterType = Enum.RaycastFilterType.Exclude
 -- ====================================================================
 
 local function GetTargetPart(Char) return Char:FindFirstChild("Head") or Char:FindFirstChild("HumanoidRootPart") end
+
+local function GetDistance(TargetPart)
+    local LocalRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not LocalRoot then return math.huge end
+    return (LocalRoot.Position - TargetPart.Position).Magnitude
+end
+
 local function GetAngleToTarget(TargetPart) 
     local CameraVector = Camera.CFrame.LookVector 
     local TargetVector = (TargetPart.Position - Camera.CFrame.Position).unit 
@@ -78,17 +89,22 @@ end
 local function FindNearestTarget()
     local SmallestAngle = _G.aimbotFOV 
     local BestTarget = nil 
+    
     if _G.LockedTarget and _G.LockedTarget.Parent and IsTargetValid(_G.LockedTarget) then
-        if GetAngleToTarget(_G.LockedTarget) <= _G.aimbotFOV and IsVisible(_G.LockedTarget) then
+        if GetAngleToTarget(_G.LockedTarget) <= _G.aimbotFOV and GetDistance(_G.LockedTarget) <= _G.aimbotMaxDistance and IsVisible(_G.LockedTarget) then
             return _G.LockedTarget 
         else
             _G.LockedTarget = nil 
         end
     end
+    
     for _, Player in ipairs(Players:GetPlayers()) do
         local TargetCharacter = Player.Character
         local AimPart = TargetCharacter and GetTargetPart(TargetCharacter)
         if not AimPart or not IsTargetValid(AimPart) then continue end
+        
+        if GetDistance(AimPart) > _G.aimbotMaxDistance then continue end
+        
         if _G.wallCheckEnabled and not IsVisible(AimPart) then continue end
         local Angle = GetAngleToTarget(AimPart)
         if Angle < SmallestAngle then 
@@ -125,19 +141,21 @@ local function StopAimbot()
 end
 
 -- ====================================================================
--- HITBOX
+-- HITBOX (Универсальный)
 -- ====================================================================
 
 local function ApplyHitboxExpansion(Player)
     local Character = Player.Character
     if not Character or Player == LocalPlayer or not IsTargetValid(Character.PrimaryPart) then return end
-    local Parts = {"HumanoidRootPart", "Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg"}
     local Multiplier = 2.5 
-    for _, PartName in ipairs(Parts) do
-        local Part = Character:FindFirstChild(PartName, true)
-        if Part and Part:IsA("BasePart") then 
+    
+    -- Перебираем все потомки, которые являются BasePart (включая аксессуары)
+    for _, Part in ipairs(Character:GetDescendants()) do
+        if Part:IsA("BasePart") then 
             local key = Part:GetFullName()
             if not _G.OriginalSizes[key] then _G.OriginalSizes[key] = Part.Size end
+            
+            -- Применяем увеличение
             Part.Size = _G.OriginalSizes[key] * Multiplier
         end
     end
@@ -145,28 +163,38 @@ end
 local function RevertHitboxExpansion(Player)
     local Character = Player.Character
     if not Character then return end
-    local Parts = {"HumanoidRootPart", "Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg"}
-    for _, PartName in ipairs(Parts) do
-        local Part = Character:FindFirstChild(PartName, true)
-        local key = Part and Part:GetFullName()
-        if Part and _G.OriginalSizes[key] then
-            Part.Size = _G.OriginalSizes[key]
-            _G.OriginalSizes[key] = nil 
+    
+    -- Перебираем все потомки, чтобы восстановить оригинальный размер
+    for _, Part in ipairs(Character:GetDescendants()) do
+        if Part:IsA("BasePart") then
+            local key = Part:GetFullName()
+            if _G.OriginalSizes[key] then
+                Part.Size = _G.OriginalSizes[key]
+                _G.OriginalSizes[key] = nil 
+            end
         end
     end
 end
 local function StartHitbox()
     if _G.HitboxConnections.Heartbeat then return end 
+    
+    -- Начальное применение ко всем игрокам
     for _, Player in ipairs(Players:GetPlayers()) do ApplyHitboxExpansion(Player) end 
+    
+    -- Постоянное применение (на случай, если игра сбрасывает размеры)
     _G.HitboxConnections.Heartbeat = RunService.Heartbeat:Connect(function()
         if not _G.hitboxEnabled then return end
         for _, Player in ipairs(Players:GetPlayers()) do ApplyHitboxExpansion(Player) end
     end)
+    
+    -- Применение к новым игрокам и новым чарам
     _G.HitboxConnections.PlayerAdded = Players.PlayerAdded:Connect(function(Player)
         _G.HitboxConnections[Player.UserId] = Player.CharacterAdded:Connect(function(Character) 
             if _G.hitboxEnabled then ApplyHitboxExpansion(Player) end
         end)
     end)
+    
+    -- Восстановление при выходе игрока
     _G.HitboxConnections.PlayerRemoving = Players.PlayerRemoving:Connect(function(Player)
         RevertHitboxExpansion(Player)
         if _G.HitboxConnections[Player.UserId] then
@@ -191,6 +219,17 @@ end
 -- ====================================================================
 -- ESP
 -- ====================================================================
+
+local function StopESPElements(player)
+    if _G.ESPHighlights[player] and _G.ESPHighlights[player].Parent then
+        _G.ESPHighlights[player]:Destroy()
+        _G.ESPHighlights[player] = nil
+    end
+    if _G.ESPLabels[player] and _G.ESPLabels[player].Parent then
+        _G.ESPLabels[player]:Destroy()
+        _G.ESPLabels[player] = nil
+    end
+end
 
 local function CreateESPLabel(Player)
     local ScreenG = Instance.new("ScreenGui")
@@ -223,10 +262,13 @@ local function CreateESPLabel(Player)
     _G.ESPLabels[Player] = ScreenG
     return ScreenG
 end
+
 local function StartESP()
     if _G.ESPConnection then return end
     local ESPColor = Color3.fromRGB(0, 255, 255) 
     local LocalRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    
+    _G.PlayerRemovingConnection = Players.PlayerRemoving:Connect(StopESPElements)
     
     _G.ESPConnection = RunService.RenderStepped:Connect(function()
         if not _G.espEnabled or not LocalRoot then 
@@ -241,6 +283,12 @@ local function StartESP()
             local Root = character and character:FindFirstChild("HumanoidRootPart")
             local isValid = character and Root and IsTargetValid(Root)
             
+            if not isValid then
+                StopESPElements(player)
+                goto continue
+            end
+            
+            -- HIGHLIGHT
             if isValid then
                 if not (_G.ESPHighlights[player] and _G.ESPHighlights[player].Parent == character) then
                     local highlight = Instance.new("Highlight")
@@ -252,10 +300,9 @@ local function StartESP()
                 _G.ESPHighlights[player].FillColor = ESPColor
                 _G.ESPHighlights[player].OutlineColor = ESPColor
                 _G.ESPHighlights[player].Enabled = true
-            elseif _G.ESPHighlights[player] then
-                _G.ESPHighlights[player].Enabled = false
             end
             
+            -- TEXT/DISTANCE
             local labelGui = _G.ESPLabels[player]
             if isValid and Head then
                 if not labelGui then labelGui = CreateESPLabel(player) end
@@ -274,23 +321,24 @@ local function StartESP()
                         NameLabel.Text = player.Name
                         DistanceLabel.Text = distance .. "м"
                         
-                        NameLabel.Position = UDim2.new(0, CenterX - NameLabel.AbsoluteSize.X / 2, 0, CenterY - 30)
+                        NameLabel.Position = UDim2.new(0, CenterX - NameLabel.AbsoluteSize.X / 2, 0, CenterY - 35)
                         DistanceLabel.Position = UDim2.new(0, CenterX - DistanceLabel.AbsoluteSize.X / 2, 0, CenterY + 5)
                     end
                 else
                     labelGui.Enabled = false 
                 end
-            elseif labelGui then
-                labelGui.Enabled = false
             end
+            ::continue::
         end
     end)
 end
 local function StopESP()
     if _G.ESPConnection then _G.ESPConnection:Disconnect() _G.ESPConnection = nil end
-    for _, highlight in pairs(_G.ESPHighlights) do if highlight and highlight.Parent then highlight:Destroy() end end
+    if _G.PlayerRemovingConnection then _G.PlayerRemovingConnection:Disconnect() _G.PlayerRemovingConnection = nil end
+    for _, player in pairs(Players:GetPlayers()) do
+        StopESPElements(player)
+    end
     table.clear(_G.ESPHighlights)
-    for _, labelGui in pairs(_G.ESPLabels) do if labelGui and labelGui.Parent then labelGui:Destroy() end end
     table.clear(_G.ESPLabels)
 end
 
@@ -331,6 +379,7 @@ local function GetConfigData()
         aimbotFOV = _G.aimbotFOV,
         aimbotSmoothness = _G.aimbotSmoothness,
         fovCircleEnabled = _G.fovCircleEnabled,
+        aimbotMaxDistance = _G.aimbotMaxDistance,
         configTestToggle = _G.configTestToggle,
     }
 end
@@ -343,6 +392,7 @@ local function ApplyConfig(config)
     _G.teamCheckEnabled = config.teamCheckEnabled ~= nil and config.teamCheckEnabled or _G.teamCheckEnabled
     _G.wallCheckEnabled = config.wallCheckEnabled ~= nil and config.wallCheckEnabled or _G.wallCheckEnabled
     _G.fovCircleEnabled = config.fovCircleEnabled ~= nil and config.fovCircleEnabled or _G.fovCircleEnabled
+    _G.aimbotMaxDistance = config.aimbotMaxDistance or _G.aimbotMaxDistance
     _G.aimbotFOV = config.aimbotFOV or _G.aimbotFOV
     _G.aimbotSmoothness = config.aimbotSmoothness or _G.aimbotSmoothness
     _G.configTestToggle = config.configTestToggle ~= nil and config.configTestToggle or _G.configTestToggle
@@ -366,6 +416,7 @@ local function ApplyConfig(config)
     if GUI_Elements.FOVCircleToggle then GUI_Elements.FOVCircleToggle:Set(_G.fovCircleEnabled) end
     if GUI_Elements.SmoothnessSlider then GUI_Elements.SmoothnessSlider:Set(_G.aimbotSmoothness) end
     if GUI_Elements.FOVSlider then GUI_Elements.FOVSlider:Set(_G.aimbotFOV) end
+    if GUI_Elements.DistanceSlider then GUI_Elements.DistanceSlider:Set(_G.aimbotMaxDistance) end
     if GUI_Elements.ConfigTestToggle then GUI_Elements.ConfigTestToggle:Set(_G.configTestToggle) end
 end
 
@@ -402,7 +453,7 @@ end
 -- GUI
 -- ====================================================================
 local Window = WindUi:CreateWindow({
-    Title = "DIX V71.0", 
+    Title = "DIX V73.0", 
     Icon = "shield",
     Author = "By DIX",
     Size = UDim2.fromOffset(450, 400),
@@ -454,10 +505,19 @@ GUI_Elements.FOVSlider = AimbotSection:Slider({
         end
     end
 })
+GUI_Elements.DistanceSlider = AimbotSection:Slider({
+    Title = "Макс. дистанция (м)",
+    Desc = "Максимальное расстояние.",
+    Step = 10, 
+    Value = { Min = 50, Max = 1000, Default = _G.aimbotMaxDistance },
+    Callback = function(value) _G.aimbotMaxDistance = value end
+})
+
 
 local HitboxSection = Tabs.Combat:Section({ Title = "Хитбокс", Opened = true })
 GUI_Elements.HitboxToggle = HitboxSection:Toggle({
-    Title = "Hitbox Expander", Default = _G.hitboxEnabled,
+    Title = "Hitbox Expander (Полная модель)", 
+    Default = _G.hitboxEnabled,
     Callback = function(value)
         _G.hitboxEnabled = value
         if value then StartHitbox() else StopHitbox() end
@@ -467,7 +527,7 @@ GUI_Elements.HitboxToggle = HitboxSection:Toggle({
 -- VISUAL TAB
 local EspSection = Tabs.Visual:Section({ Title = "ESP", Opened = true })
 GUI_Elements.ESPToggle = EspSection:Toggle({
-    Title = "Highlight + Text (Code Font)",
+    Title = "Highlight + Text",
     Default = _G.espEnabled,
     Callback = function(value)
         _G.espEnabled = value
@@ -481,7 +541,6 @@ ThemesSection:ThemeChanger({ Title = "Тема", Desc = "Выбрать тему
 
 local ConfigSection = Tabs.Settings:Section({ Title = "Конфиг", Opened = true })
 
--- ТЕСТОВЫЙ ЭЛЕМЕНТ
 GUI_Elements.ConfigTestToggle = ConfigSection:Toggle({
     Title = "Тест Тоггл",
     Desc = "Сохраняется/загружается.",
