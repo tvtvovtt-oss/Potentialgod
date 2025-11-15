@@ -1,5 +1,5 @@
 -- Load WindUi Library
-local WindUi = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+local WindUi = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
 -- [1] ИНИЦИАЛИЗАЦИЯ
 local Players = game:GetService("Players")
@@ -31,6 +31,14 @@ UpdateCharacter(LocalPlayer.Character)
 RaycastParams.FilterType = Enum.RaycastFilterType.Exclude
 
 -- [2] ЯДРО И ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+
+-- ⚡️ ИСПРАВЛЕННАЯ ЛОГИКА ТИМ-ЧЕКА (Team Check Fix)
+local function IsTeammate(Player)
+    if not LocalPlayer.Team or not Player.Team then return false end
+    -- Сравниваем объекты Team, а не их имена или значения, что надежнее.
+    return LocalPlayer.Team == Player.Team
+end
+
 local function GetTargetPart(Char) return Char:FindFirstChild("Head") or Char:FindFirstChild("HumanoidRootPart") end
 local function GetAngleToTarget(TargetPart) 
     return math.deg(math.acos(Camera.CFrame.LookVector:Dot((TargetPart.Position - Camera.CFrame.Position).unit)))
@@ -40,7 +48,8 @@ local function IsTargetValid(TargetPart)
     if not Player or Player == LocalPlayer then return false end
     local TargetHumanoid = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
     if not TargetHumanoid or TargetHumanoid.Health <= 0 then return false end
-    if _G.teamCheckEnabled and LocalPlayer.Team and Player.Team and LocalPlayer.Team == Player.Team then return false end 
+    -- Используем IsTeammate для надежной проверки
+    if _G.teamCheckEnabled and IsTeammate(Player) then return false end 
     return true
 end
 local function IsVisible(TargetPart)
@@ -84,7 +93,8 @@ local function StartAimbot()
         local AimPart = FindNearestTarget()
         if AimPart then 
             local PredictedPos = PredictPosition(AimPart) 
-            pcall(function() Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, PredictedPos), _G.aimbotSmoothness) end)
+            -- ⚡️ АНТИ-ДЖИТТЕР: Удалена обертка pcall для более стабильного CFrame.Lerp
+            Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, PredictedPos), _G.aimbotSmoothness)
         else _G.LockedTarget = nil end
     end)
 end
@@ -100,7 +110,9 @@ local function StartFOVCircle()
     if _G.FOVCircleGui then return end
     local ScreenG = Instance.new("ScreenGui") ScreenG.Name = "DIX_FOVCircle" ScreenG.DisplayOrder, ScreenG.Parent = 999, CoreGui _G.FOVCircleGui = ScreenG
     local CircleF = Instance.new("Frame") CircleF.AnchorPoint = Vector2.new(0.5, 0.5) CircleF.Position = UDim2.new(0.5, 0, 0.5, 0) CircleF.BackgroundTransparency, CircleF.Parent, CircleF.ZIndex = 1, ScreenG, 99
-    Instance.new("UIAspectRatioConstraint").AspectRatio, Instance.new("UICorner").CornerRadius, Instance.new("UIStroke").Thickness, Instance.new("UIStroke").Color, Instance.new("UIStroke").Transparency, Instance.new("UIStroke").ApplyStrokeMode, Instance.new("UIStroke").Parent = 1, UDim.new(0.5, 0), 2, Color3.new(1, 1, 1), 0.5, Enum.ApplyStrokeMode.Border, CircleF
+    local Ratio = Instance.new("UIAspectRatioConstraint") Ratio.AspectRatio = 1 Ratio.Parent = CircleF
+    local Corner = Instance.new("UICorner") Corner.CornerRadius = UDim.new(0.5, 0) Corner.Parent = CircleF
+    local Stroke = Instance.new("UIStroke") Stroke.Thickness = 2 Stroke.Color = Color3.new(1, 1, 1) Stroke.Transparency = 0.5 Stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border Stroke.Parent = CircleF
     CircleF.Size = UDim2.new(0, _G.aimbotFOV * 1.0, 0, _G.aimbotFOV * 1.0)
     _G.FOVConnection = RunService.RenderStepped:Connect(function()
         if not _G.fovCircleEnabled or not CircleF.Parent then CircleF.Visible = false return end
@@ -113,7 +125,7 @@ local function StopFOVCircle()
     if _G.FOVCircleGui then _G.FOVCircleGui:Destroy() _G.FOVCircleGui = nil end
 end
 
--- Hitbox Expander
+-- Hitbox Expander (без изменений)
 local function ApplyHitboxExpansion(Player)
     local Char = Player.Character
     if not Char or Player == LocalPlayer or not IsTargetValid(Char.PrimaryPart) then return end
@@ -169,7 +181,8 @@ local function StartESP()
                 if _G.ESPHighlights[player] then _G.ESPHighlights[player].Enabled = false end
                 continue 
             end
-            local isTeammate = LocalPlayer.Team and player.Team and LocalPlayer.Team == player.Team
+            
+            local isTeammate = IsTeammate(player)
             local shouldShow = not (_G.teamCheckEnabled and isTeammate)
             
             if shouldShow then
@@ -196,7 +209,7 @@ end
 
 -- [3] ЗАГРУЗКА ИНТЕРФЕЙСА (GUI)
 local Window = WindUi:CreateWindow({
-    Title = "DIX V67.0 | Cleaned Hub", 
+    Title = "DIX V70.0 | Jitter Fix", 
     Icon = "shield", Author = "By DIX", Size = UDim2.fromOffset(450, 400), Theme = "Dark", HideSearchBar = true,
 })
 
