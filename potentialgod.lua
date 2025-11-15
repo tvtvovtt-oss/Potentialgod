@@ -32,7 +32,7 @@ RaycastParams.FilterType = Enum.RaycastFilterType.Exclude
 
 -- [2] ЯДРО И ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 
--- ⚡️ ЛОГИКА ТИМ-ЧЕКА
+-- ЛОГИКА ТИМ-ЧЕКА
 local function IsTeammate(Player)
     if not LocalPlayer.Team or not Player.Team then 
         return false 
@@ -65,11 +65,10 @@ local function PredictPosition(TargetPart)
     return TargetPart.Position
 end
 
--- ⚡️ ЛОГИКА ПОИСКА ЦЕЛИ АИМБОТА
+-- ЛОГИКА ПОИСКА ЦЕЛИ АИМБОТА
 local function FindNearestTarget()
     local SmallestAngle, BestTarget = _G.aimbotFOV, nil 
     
-    -- Удержание цели (Lock)
     if _G.LockedTarget and _G.LockedTarget.Parent and IsTargetValid(_G.LockedTarget) then
         if GetAngleToTarget(_G.LockedTarget) <= _G.aimbotFOV then 
             if not _G.wallCheckEnabled or IsVisible(_G.LockedTarget) then
@@ -79,7 +78,6 @@ local function FindNearestTarget()
         _G.LockedTarget = nil 
     end
     
-    -- Поиск новой цели
     for _, Player in ipairs(Players:GetPlayers()) do
         local AimPart = Player.Character and GetTargetPart(Player.Character)
         if not AimPart or not IsTargetValid(AimPart) or (_G.wallCheckEnabled and not IsVisible(AimPart)) then continue end 
@@ -102,7 +100,8 @@ local function StartAimbot()
     if _G.AimConnection then return end 
     local camScripts = LocalPlayer.PlayerScripts:FindFirstChild("CameraModule")
     if camScripts then camScripts.Enabled = false end 
-    _G.AimConnection = RunService.RenderStepped:Connect(function()
+    -- ⚡️ ИСПРАВЛЕНИЕ: Переключение на Heartbeat для стабильности
+    _G.AimConnection = RunService.Heartbeat:Connect(function()
         if not _G.aimbotEnabled or not Camera.CFrame or not Character then return end 
         local AimPart = FindNearestTarget()
         if AimPart then 
@@ -222,7 +221,7 @@ end
 
 -- [3] ЗАГРУЗКА ИНТЕРФЕЙСА (GUI)
 local Window = WindUi:CreateWindow({
-    Title = "DIX V72.0 | Core Fix", 
+    Title = "DIX V73.0 | Heartbeat Aimbot", 
     Icon = "shield", Author = "By DIX", Size = UDim2.fromOffset(450, 400), Theme = "Dark", HideSearchBar = true,
 })
 
