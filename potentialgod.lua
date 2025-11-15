@@ -32,10 +32,13 @@ RaycastParams.FilterType = Enum.RaycastFilterType.Exclude
 
 -- [2] ЯДРО И ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 
--- ⚡️ ИСПРАВЛЕННАЯ ЛОГИКА ТИМ-ЧЕКА (Team Check Fix)
+-- ⚡️ ОБНОВЛЕННАЯ ЛОГИКА ТИМ-ЧЕКА (Для Multi-Mode)
 local function IsTeammate(Player)
-    if not LocalPlayer.Team or not Player.Team then return false end
-    -- Сравниваем объекты Team, а не их имена или значения, что надежнее.
+    -- Проверяем, что объекты Team существуют у обоих игроков
+    if not LocalPlayer.Team or not Player.Team then 
+        return false 
+    end
+    -- Сравниваем объекты Team
     return LocalPlayer.Team == Player.Team
 end
 
@@ -48,7 +51,6 @@ local function IsTargetValid(TargetPart)
     if not Player or Player == LocalPlayer then return false end
     local TargetHumanoid = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
     if not TargetHumanoid or TargetHumanoid.Health <= 0 then return false end
-    -- Используем IsTeammate для надежной проверки
     if _G.teamCheckEnabled and IsTeammate(Player) then return false end 
     return true
 end
@@ -64,22 +66,38 @@ local function PredictPosition(TargetPart)
     end
     return TargetPart.Position
 end
+
+-- ⚡️ ИСПРАВЛЕНИЕ АИМБОТА: Упрощение логики поиска и удержания цели.
 local function FindNearestTarget()
     local SmallestAngle, BestTarget = _G.aimbotFOV, nil 
+    
+    -- Если LockedTarget все еще валиден и находится в FOV, сохраняем его.
     if _G.LockedTarget and _G.LockedTarget.Parent and IsTargetValid(_G.LockedTarget) then
-        if GetAngleToTarget(_G.LockedTarget) <= _G.aimbotFOV and IsVisible(_G.LockedTarget) then return _G.LockedTarget end
+        if GetAngleToTarget(_G.LockedTarget) <= _G.aimbotFOV then 
+            if not _G.wallCheckEnabled or IsVisible(_G.LockedTarget) then
+                return _G.LockedTarget 
+            end
+        end
+        -- Если цель не в FOV или не видна, сбрасываем LockedTarget
         _G.LockedTarget = nil 
     end
+    
+    -- Ищем новую лучшую цель
     for _, Player in ipairs(Players:GetPlayers()) do
         local AimPart = Player.Character and GetTargetPart(Player.Character)
+        -- Используем IsTargetValid, которая включает Team Check
         if not AimPart or not IsTargetValid(AimPart) or (_G.wallCheckEnabled and not IsVisible(AimPart)) then continue end 
+        
         local Angle = GetAngleToTarget(AimPart)
         if Angle < SmallestAngle then 
             SmallestAngle = Angle
             BestTarget = AimPart
         end
     end
-    if BestTarget then _G.LockedTarget = BestTarget end
+    
+    if BestTarget then 
+        _G.LockedTarget = BestTarget 
+    end
     return BestTarget
 end
 
@@ -93,7 +111,6 @@ local function StartAimbot()
         local AimPart = FindNearestTarget()
         if AimPart then 
             local PredictedPos = PredictPosition(AimPart) 
-            -- ⚡️ АНТИ-ДЖИТТЕР: Удалена обертка pcall для более стабильного CFrame.Lerp
             Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, PredictedPos), _G.aimbotSmoothness)
         else _G.LockedTarget = nil end
     end)
@@ -125,7 +142,7 @@ local function StopFOVCircle()
     if _G.FOVCircleGui then _G.FOVCircleGui:Destroy() _G.FOVCircleGui = nil end
 end
 
--- Hitbox Expander (без изменений)
+-- Hitbox Expander
 local function ApplyHitboxExpansion(Player)
     local Char = Player.Character
     if not Char or Player == LocalPlayer or not IsTargetValid(Char.PrimaryPart) then return end
@@ -209,7 +226,7 @@ end
 
 -- [3] ЗАГРУЗКА ИНТЕРФЕЙСА (GUI)
 local Window = WindUi:CreateWindow({
-    Title = "DIX V70.0 | Jitter Fix", 
+    Title = "DIX V71.0 | Core Fix", 
     Icon = "shield", Author = "By DIX", Size = UDim2.fromOffset(450, 400), Theme = "Dark", HideSearchBar = true,
 })
 
