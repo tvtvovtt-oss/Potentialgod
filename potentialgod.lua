@@ -100,9 +100,21 @@ local function StartAimbot()
     if _G.AimConnection then return end 
     local camScripts = LocalPlayer.PlayerScripts:FindFirstChild("CameraModule")
     
-    -- ⚡️ АГРЕССИВНЫЙ АНТИ-ДЖИТТЕР: Фиксация режима камеры на Scriptable
+    -- ⚡️ АГРЕССИВНЫЙ КОНТРОЛЬ: Фиксация режима камеры и отключение скриптов
     if camScripts then camScripts.Enabled = false end 
     Camera.CameraType = Enum.CameraType.Scriptable
+    
+    -- ⚡️ Повторная активация через короткий таймаут для гарантии отключения скриптов
+    task.wait(0.1)
+    if camScripts then camScripts.Enabled = false end 
+    Camera.CameraType = Enum.CameraType.Scriptable
+
+    -- ⚡️ Постоянная проверка режима камеры
+    _G.AimbotSafetyCheck = RunService.Heartbeat:Connect(function()
+        if _G.aimbotEnabled and Camera.CameraType ~= Enum.CameraType.Scriptable then
+            Camera.CameraType = Enum.CameraType.Scriptable
+        end
+    end)
     
     _G.AimConnection = RunService.Heartbeat:Connect(function()
         if not _G.aimbotEnabled or not Camera.CFrame or not Character then return end 
@@ -115,13 +127,14 @@ local function StartAimbot()
 end
 
 local function StopAimbot()
+    if _G.AimbotSafetyCheck then _G.AimbotSafetyCheck:Disconnect() _G.AimbotSafetyCheck = nil end
     if _G.AimConnection then _G.AimConnection:Disconnect() _G.AimConnection = nil end
     _G.LockedTarget = nil 
     local camScripts = LocalPlayer.PlayerScripts:FindFirstChild("CameraModule")
     
-    -- ⚡️ Возвращаем камеру в нормальный режим
+    -- Возвращаем камеру в нормальный режим
     if camScripts then camScripts.Enabled = true end 
-    Camera.CameraType = Enum.CameraType.Custom -- Standard mode
+    Camera.CameraType = Enum.CameraType.Custom 
 end
 
 -- FOV Circle
@@ -228,7 +241,7 @@ end
 
 -- [3] ЗАГРУЗКА ИНТЕРФЕЙСА (GUI)
 local Window = WindUi:CreateWindow({
-    Title = "DIX V74.0 | Camera Lock Anti-Jitter", 
+    Title = "DIX V75.0 | Persistent Camera Control", 
     Icon = "shield", Author = "By DIX", Size = UDim2.fromOffset(450, 400), Theme = "Dark", HideSearchBar = true,
 })
 
