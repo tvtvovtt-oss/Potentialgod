@@ -99,8 +99,11 @@ end
 local function StartAimbot() 
     if _G.AimConnection then return end 
     local camScripts = LocalPlayer.PlayerScripts:FindFirstChild("CameraModule")
+    
+    -- ⚡️ АГРЕССИВНЫЙ АНТИ-ДЖИТТЕР: Фиксация режима камеры на Scriptable
     if camScripts then camScripts.Enabled = false end 
-    -- ⚡️ ИСПРАВЛЕНИЕ: Переключение на Heartbeat для стабильности
+    Camera.CameraType = Enum.CameraType.Scriptable
+    
     _G.AimConnection = RunService.Heartbeat:Connect(function()
         if not _G.aimbotEnabled or not Camera.CFrame or not Character then return end 
         local AimPart = FindNearestTarget()
@@ -110,11 +113,15 @@ local function StartAimbot()
         else _G.LockedTarget = nil end
     end)
 end
+
 local function StopAimbot()
     if _G.AimConnection then _G.AimConnection:Disconnect() _G.AimConnection = nil end
     _G.LockedTarget = nil 
     local camScripts = LocalPlayer.PlayerScripts:FindFirstChild("CameraModule")
+    
+    -- ⚡️ Возвращаем камеру в нормальный режим
     if camScripts then camScripts.Enabled = true end 
+    Camera.CameraType = Enum.CameraType.Custom -- Standard mode
 end
 
 -- FOV Circle
@@ -221,7 +228,7 @@ end
 
 -- [3] ЗАГРУЗКА ИНТЕРФЕЙСА (GUI)
 local Window = WindUi:CreateWindow({
-    Title = "DIX V73.0 | Heartbeat Aimbot", 
+    Title = "DIX V74.0 | Camera Lock Anti-Jitter", 
     Icon = "shield", Author = "By DIX", Size = UDim2.fromOffset(450, 400), Theme = "Dark", HideSearchBar = true,
 })
 
