@@ -32,13 +32,11 @@ RaycastParams.FilterType = Enum.RaycastFilterType.Exclude
 
 -- [2] ЯДРО И ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 
--- ⚡️ ОБНОВЛЕННАЯ ЛОГИКА ТИМ-ЧЕКА (Для Multi-Mode)
+-- ⚡️ ЛОГИКА ТИМ-ЧЕКА
 local function IsTeammate(Player)
-    -- Проверяем, что объекты Team существуют у обоих игроков
     if not LocalPlayer.Team or not Player.Team then 
         return false 
     end
-    -- Сравниваем объекты Team
     return LocalPlayer.Team == Player.Team
 end
 
@@ -67,25 +65,23 @@ local function PredictPosition(TargetPart)
     return TargetPart.Position
 end
 
--- ⚡️ ИСПРАВЛЕНИЕ АИМБОТА: Упрощение логики поиска и удержания цели.
+-- ⚡️ ЛОГИКА ПОИСКА ЦЕЛИ АИМБОТА
 local function FindNearestTarget()
     local SmallestAngle, BestTarget = _G.aimbotFOV, nil 
     
-    -- Если LockedTarget все еще валиден и находится в FOV, сохраняем его.
+    -- Удержание цели (Lock)
     if _G.LockedTarget and _G.LockedTarget.Parent and IsTargetValid(_G.LockedTarget) then
         if GetAngleToTarget(_G.LockedTarget) <= _G.aimbotFOV then 
             if not _G.wallCheckEnabled or IsVisible(_G.LockedTarget) then
                 return _G.LockedTarget 
             end
         end
-        -- Если цель не в FOV или не видна, сбрасываем LockedTarget
         _G.LockedTarget = nil 
     end
     
-    -- Ищем новую лучшую цель
+    -- Поиск новой цели
     for _, Player in ipairs(Players:GetPlayers()) do
         local AimPart = Player.Character and GetTargetPart(Player.Character)
-        -- Используем IsTargetValid, которая включает Team Check
         if not AimPart or not IsTargetValid(AimPart) or (_G.wallCheckEnabled and not IsVisible(AimPart)) then continue end 
         
         local Angle = GetAngleToTarget(AimPart)
@@ -226,7 +222,7 @@ end
 
 -- [3] ЗАГРУЗКА ИНТЕРФЕЙСА (GUI)
 local Window = WindUi:CreateWindow({
-    Title = "DIX V71.0 | Core Fix", 
+    Title = "DIX V72.0 | Core Fix", 
     Icon = "shield", Author = "By DIX", Size = UDim2.fromOffset(450, 400), Theme = "Dark", HideSearchBar = true,
 })
 
